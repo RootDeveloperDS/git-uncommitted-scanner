@@ -3,6 +3,7 @@
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![Typer](https://img.shields.io/badge/typer-CLI-black.svg)
 ![Textual](https://img.shields.io/badge/textual-TUI-cyan.svg)
+[![PyPI version](https://badge.fury.io/py/git-uncommitted-scanner.svg)](https://badge.fury.io/py/git-uncommitted-scanner)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 **A lightning-fast, cross-platform utility that recursively deep-scans directories to instantly find Git repositories with uncommitted changes.**
@@ -62,6 +63,9 @@ scanrepos -i /path/to/your/projects
 *   **OS-Aware Terminal Spawning**: Select a repository in the TUI and instantly spawn a native terminal (Windows, macOS, or Linux) running `git status` right in that directory.
 *   **Cross-Platform**: Built to work flawlessly across Windows, macOS, and Linux environments.
 
+*Built with [Python](https://www.python.org/), [Typer](https://typer.tiangolo.com/), and [Textual](https://textual.textualize.io/).*
+
 ---
 
-*Built with [Python](https://www.python.org/), [Typer](https://typer.tiangolo.com/), and [Textual](https://textual.textualize.io/).*
+Built with ❤️ by [RootDeveloperDS](https://github.com/RootDeveloperDS)
+
