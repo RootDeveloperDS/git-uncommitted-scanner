@@ -1,0 +1,13 @@
+language: "en-US"
+
+reviews:
+  profile: "assertive" # Choices: chill, assertive
+  auto_review:
+    enabled: true
+    drafts: true
+  high_level_summary_instructions: |
+    Do NOT give vague summaries. Structure your high-level summary as follows:
+    - **Core Objective**: What problem this PR solves.
+    - **Architectural Impact**: Explain how changes affect system performance, memory, or component coupling.
+    - **Removal Breakdown**: For deleted code/files, explain explicitly why it was safe to remove and what took its place.
+    - **Potential Breakages**: Flag any missing edge-case handling or regression risks.
