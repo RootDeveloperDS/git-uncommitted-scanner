@@ -5,6 +5,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich import print as rprint
+from textual import on
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Label, LoadingIndicator
 from textual.binding import Binding
@@ -83,7 +84,7 @@ class GitScannerTUI(App):
     
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("o", "open_terminal", "Open Workspace"),
+        Binding("o", "open_terminal", "Open Workspace (o/Enter/DblClick)"),
         Binding("r", "refresh_scan", "Refresh Scan")
     ]
 
@@ -154,8 +155,14 @@ class GitScannerTUI(App):
             # ➔ FIX: Ensure the extracted cell is cast to a standard string
             repo_path = str(table.get_row_at(row_index)[1])
             open_external_terminal(repo_path)
+            self.notify(f"🚀 Spawning terminal for: {repo_path}")
         except Exception:
             self.notify("ERROR: TARGET A REPOSITORY FIRST", severity="error")
+
+    @on(DataTable.RowSelected)
+    def handle_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle Enter key or double click on a row to open the terminal."""
+        self.action_open_terminal()
 
 # ---------------------------------------------------------
 # CLI & ROUTING
