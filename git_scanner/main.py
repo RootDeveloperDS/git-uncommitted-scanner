@@ -154,8 +154,12 @@ class GitScannerTUI(App):
             # ➔ FIX: Ensure the extracted cell is cast to a standard string
             repo_path = str(table.get_row_at(row_index)[1])
             open_external_terminal(repo_path)
+            self.notify(f"TERMINAL SPAWNED FOR: {repo_path}")
         except Exception:
             self.notify("ERROR: TARGET A REPOSITORY FIRST", severity="error")
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        self.action_open_terminal()
 
 # ---------------------------------------------------------
 # CLI & ROUTING
