@@ -1,4 +1,5 @@
 import sys
+import os
 import subprocess
 from pathlib import Path
 import typer
@@ -10,9 +11,26 @@ from textual.widgets import Header, Footer, DataTable, Label, LoadingIndicator
 from textual.binding import Binding
 from textual.worker import get_current_worker
 
+
 # ---------------------------------------------------------
 # CORE LOGIC
 # ---------------------------------------------------------
+def find_git_repos(base_path: Path):
+    """Optimized directory traversal to find git repositories."""
+    ignore_dirs = {
+        'node_modules', '.venv', 'venv', 'env', '.env',
+        '.tox', 'build', 'dist', 'target', '.idea', '.vscode'
+    }
+
+    for root, dirs, files in os.walk(base_path):
+        if '.git' in dirs or '.git' in files:
+            yield Path(root)
+            if '.git' in dirs:
+                dirs.remove('.git') # Do not traverse inside .git directory
+
+        # Prune ignored directories from traversal
+        dirs[:] = [d for d in dirs if d not in ignore_dirs]
+
 def is_repo_dirty(repo_path: Path) -> bool:
     """Checks if a git repo has uncommitted changes."""
     try:
@@ -120,10 +138,9 @@ class GitScannerTUI(App):
         worker = get_current_worker()
         dirty_repos = []
         
-        for git_dir in self.target_dir.rglob('.git'):
+        for repo_path in find_git_repos(self.target_dir):
             if worker.is_cancelled: 
                 return
-            repo_path = git_dir.parent
             if is_repo_dirty(repo_path):
                 dirty_repos.append(repo_path)
                 
@@ -190,8 +207,8 @@ def scan(
     # Route 2: CLI Mode
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
         dirty_repos = [
-            git_dir.parent for git_dir in base_path.rglob('.git') 
-            if is_repo_dirty(git_dir.parent)
+            repo_path for repo_path in find_git_repos(base_path)
+            if is_repo_dirty(repo_path)
         ]
 
     if not dirty_repos:
