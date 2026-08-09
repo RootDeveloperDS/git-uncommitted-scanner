@@ -1,10 +1,14 @@
 import sys
+import os
 import subprocess
 from pathlib import Path
+from typing import Optional, Dict, List, Any
+
 import typer
 from rich.console import Console
 from rich.table import Table
 from rich import print as rprint
+from textual import on
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Label, LoadingIndicator
 from textual.binding import Binding
@@ -13,16 +17,57 @@ from textual.worker import get_current_worker
 # ---------------------------------------------------------
 # CORE LOGIC
 # ---------------------------------------------------------
-def is_repo_dirty(repo_path: Path) -> bool:
-    """Checks if a git repo has uncommitted changes."""
+def find_git_repos(base_path: Path):
+    """Optimized directory traversal to find git repositories."""
+    ignore_dirs = {
+        'node_modules', '.venv', 'venv', 'env', '.env',
+        '.tox', 'build', 'dist', 'target', '.idea', '.vscode'
+    }
+
+    for root, dirs, _files in os.walk(base_path):
+        if '.git' in dirs:
+            yield Path(root)
+            dirs.remove('.git')  # Do not traverse inside .git directory
+
+        # Prune ignored directories from traversal
+        dirs[:] = [d for d in dirs if d not in ignore_dirs]
+
+
+def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
+    """Checks if a git repo has uncommitted changes and returns status details."""
     try:
-        result = subprocess.run(
+        status_result = subprocess.run(
             ['git', 'status', '--porcelain'],
             cwd=repo_path, capture_output=True, text=True, check=True
         )
-        return bool(result.stdout.strip())
+        output = status_result.stdout.strip()
+        if not output:
+            return None
+
+        branch_result = subprocess.run(
+            ['git', 'branch', '--show-current'],
+            cwd=repo_path, capture_output=True, text=True, check=True
+        )
+        branch = branch_result.stdout.strip() or "HEAD"
+
+        lines = [line for line in output.split('\n') if line]
+        untracked = sum(1 for line in lines if line.startswith('??'))
+        modified = len(lines) - untracked
+
+        return {
+            'path': repo_path,
+            'branch': branch,
+            'modified': modified,
+            'untracked': untracked
+        }
     except Exception:
-        return False
+        return None
+
+
+def is_repo_dirty(repo_path: Path) -> bool:
+    """Checks if a git repo has uncommitted changes."""
+    return get_repo_details(repo_path) is not None
+
 
 def open_external_terminal(path: str) -> None:
     """Cross-platform function to open terminal and execute 'git status'."""
@@ -83,7 +128,7 @@ class GitScannerTUI(App):
     
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("o", "open_terminal", "Open Workspace"),
+        Binding("o", "open_terminal", "Open Workspace (o/Enter/DblClick)"),
         Binding("r", "refresh_scan", "Refresh Scan")
     ]
 
@@ -102,7 +147,7 @@ class GitScannerTUI(App):
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
-        table.add_columns("ID", "Uncommitted Repository Target")
+        table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -120,16 +165,16 @@ class GitScannerTUI(App):
         worker = get_current_worker()
         dirty_repos = []
         
-        for git_dir in self.target_dir.rglob('.git'):
+        for repo_path in find_git_repos(self.target_dir):
             if worker.is_cancelled: 
                 return
-            repo_path = git_dir.parent
-            if is_repo_dirty(repo_path):
-                dirty_repos.append(repo_path)
+            details = get_repo_details(repo_path)
+            if details:
+                dirty_repos.append(details)
                 
         self.call_from_thread(self.update_table, dirty_repos)
 
-    def update_table(self, repos: list[Path]) -> None:
+    def update_table(self, repos: List[Dict[str, Any]]) -> None:
         table = self.query_one(DataTable)
         loader = self.query_one("#loader", LoadingIndicator)
         status = self.query_one("#status-bar", Label)
@@ -144,7 +189,13 @@ class GitScannerTUI(App):
             
         status.update(f"⚠️ DETECTED {len(repos)} REPOSITORIES REQUIRING ATTENTION")
         for idx, repo in enumerate(repos, 1):
-            table.add_row(str(idx), str(repo))
+            table.add_row(
+                str(idx),
+                str(repo['path']),
+                str(repo['branch']),
+                str(repo['modified']),
+                str(repo['untracked'])
+            )
 
     def action_open_terminal(self) -> None:
         table = self.query_one(DataTable)
@@ -154,8 +205,21 @@ class GitScannerTUI(App):
             # ➔ FIX: Ensure the extracted cell is cast to a standard string
             repo_path = str(table.get_row_at(row_index)[1])
             open_external_terminal(repo_path)
+            self.notify(f"🚀 Spawning terminal for: {repo_path}")
         except Exception:
             self.notify("ERROR: TARGET A REPOSITORY FIRST", severity="error")
+
+    @on(DataTable.RowSelected)
+    def handle_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle Enter key or double click on a row to open the terminal."""
+        self.action_open_terminal()
+
+# Ensure UTF-8 output encoding for legacy Windows console compatibility
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 # ---------------------------------------------------------
 # CLI & ROUTING
@@ -189,23 +253,34 @@ def scan(
 
     # Route 2: CLI Mode
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
-        dirty_repos = [
-            git_dir.parent for git_dir in base_path.rglob('.git') 
-            if is_repo_dirty(git_dir.parent)
-        ]
+        dirty_repos = []
+        for repo_path in find_git_repos(base_path):
+            details = get_repo_details(repo_path)
+            if details:
+                dirty_repos.append(details)
 
     if not dirty_repos:
         rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
         return
 
-    table = Table(title="⚠️ Uncommitted Repositories", show_header=True, header_style="bold magenta")
+    table = Table(title="Uncommitted Repositories", show_header=True, header_style="bold magenta")
     table.add_column("No.", style="dim", width=4)
     table.add_column("Repository Path", style="cyan")
+    table.add_column("Branch", style="green")
+    table.add_column("Modified", style="yellow", justify="right")
+    table.add_column("Untracked", style="red", justify="right")
 
     for idx, repo in enumerate(dirty_repos, 1):
-        table.add_row(str(idx), str(repo))
+        table.add_row(
+            str(idx),
+            str(repo['path']),
+            str(repo['branch']),
+            str(repo['modified']),
+            str(repo['untracked'])
+        )
 
     console.print(table)
 
 if __name__ == "__main__":
     app()
+
