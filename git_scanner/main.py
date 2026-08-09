@@ -13,16 +13,38 @@ from textual.worker import get_current_worker
 # ---------------------------------------------------------
 # CORE LOGIC
 # ---------------------------------------------------------
-def is_repo_dirty(repo_path: Path) -> bool:
-    """Checks if a git repo has uncommitted changes."""
+from typing import Optional, Dict, Any
+
+def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
+    """Checks if a git repo has uncommitted changes and returns details."""
     try:
-        result = subprocess.run(
+        status_result = subprocess.run(
             ['git', 'status', '--porcelain'],
             cwd=repo_path, capture_output=True, text=True, check=True
         )
-        return bool(result.stdout.strip())
+        output = status_result.stdout.strip()
+
+        if not output:
+            return None
+
+        branch_result = subprocess.run(
+            ['git', 'branch', '--show-current'],
+            cwd=repo_path, capture_output=True, text=True, check=True
+        )
+        branch = branch_result.stdout.strip() or "HEAD"
+
+        lines = output.split('\n')
+        modified = sum(1 for line in lines if line and not line.startswith('??'))
+        untracked = sum(1 for line in lines if line and line.startswith('??'))
+
+        return {
+            'path': repo_path,
+            'branch': branch,
+            'modified': modified,
+            'untracked': untracked
+        }
     except Exception:
-        return False
+        return None
 
 def open_external_terminal(path: str) -> None:
     """Cross-platform function to open terminal and execute 'git status'."""
@@ -102,7 +124,7 @@ class GitScannerTUI(App):
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
-        table.add_columns("ID", "Uncommitted Repository Target")
+        table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -124,12 +146,13 @@ class GitScannerTUI(App):
             if worker.is_cancelled: 
                 return
             repo_path = git_dir.parent
-            if is_repo_dirty(repo_path):
-                dirty_repos.append(repo_path)
+            details = get_repo_details(repo_path)
+            if details:
+                dirty_repos.append(details)
                 
         self.call_from_thread(self.update_table, dirty_repos)
 
-    def update_table(self, repos: list[Path]) -> None:
+    def update_table(self, repos: list[Dict[str, Any]]) -> None:
         table = self.query_one(DataTable)
         loader = self.query_one("#loader", LoadingIndicator)
         status = self.query_one("#status-bar", Label)
@@ -144,7 +167,13 @@ class GitScannerTUI(App):
             
         status.update(f"⚠️ DETECTED {len(repos)} REPOSITORIES REQUIRING ATTENTION")
         for idx, repo in enumerate(repos, 1):
-            table.add_row(str(idx), str(repo))
+            table.add_row(
+                str(idx),
+                str(repo['path']),
+                str(repo['branch']),
+                str(repo['modified']),
+                str(repo['untracked'])
+            )
 
     def action_open_terminal(self) -> None:
         table = self.query_one(DataTable)
@@ -189,10 +218,11 @@ def scan(
 
     # Route 2: CLI Mode
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
-        dirty_repos = [
-            git_dir.parent for git_dir in base_path.rglob('.git') 
-            if is_repo_dirty(git_dir.parent)
-        ]
+        dirty_repos = []
+        for git_dir in base_path.rglob('.git'):
+            details = get_repo_details(git_dir.parent)
+            if details:
+                dirty_repos.append(details)
 
     if not dirty_repos:
         rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
@@ -201,9 +231,18 @@ def scan(
     table = Table(title="⚠️ Uncommitted Repositories", show_header=True, header_style="bold magenta")
     table.add_column("No.", style="dim", width=4)
     table.add_column("Repository Path", style="cyan")
+    table.add_column("Branch", style="green")
+    table.add_column("Modified", style="yellow")
+    table.add_column("Untracked", style="red")
 
     for idx, repo in enumerate(dirty_repos, 1):
-        table.add_row(str(idx), str(repo))
+        table.add_row(
+            str(idx),
+            str(repo['path']),
+            str(repo['branch']),
+            str(repo['modified']),
+            str(repo['untracked'])
+        )
 
     console.print(table)
 
