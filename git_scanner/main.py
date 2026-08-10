@@ -17,6 +17,23 @@ from textual.worker import get_current_worker
 # ---------------------------------------------------------
 # CORE LOGIC
 # ---------------------------------------------------------
+def truncate_path(path_obj: Path, max_length: int = 50) -> str:
+    """Helper to truncate very long repository paths for cleaner UI rendering."""
+    path_str = str(path_obj)
+    if len(path_str) <= max_length:
+        return path_str
+
+    parts = path_obj.parts
+    if len(parts) > 3:
+        # Keep first part (e.g. '/' or 'C:\') and last two parts
+        truncated = str(Path(parts[0], "...", *parts[-2:]))
+        if len(truncated) <= max_length:
+            return truncated
+
+    # Fallback to simple string truncation
+    return "..." + path_str[-(max_length - 3):]
+
+
 def find_git_repos(base_path: Path):
     """Optimized directory traversal to find git repositories."""
     ignore_dirs = {
@@ -191,19 +208,18 @@ class GitScannerTUI(App):
         for idx, repo in enumerate(repos, 1):
             table.add_row(
                 str(idx),
-                str(repo['path']),
+                truncate_path(repo['path']),
                 str(repo['branch']),
                 str(repo['modified']),
-                str(repo['untracked'])
+                str(repo['untracked']),
+                key=str(repo['path'])
             )
 
     def action_open_terminal(self) -> None:
         table = self.query_one(DataTable)
         try:
-            # Safely grab the exact string from column index 1 of the highlighted row
-            row_index = table.cursor_row
-            # ➔ FIX: Ensure the extracted cell is cast to a standard string
-            repo_path = str(table.get_row_at(row_index)[1])
+            # Grab the full path from the row key instead of the displayed string
+            repo_path = table.coordinate_to_cell_key(table.cursor_coordinate)[0].value
             open_external_terminal(repo_path)
             self.notify(f"🚀 Spawning terminal for: {repo_path}")
         except Exception:
