@@ -1,6 +1,8 @@
 import sys
 import os
 import subprocess
+import json
+import csv
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 
@@ -25,9 +27,10 @@ def find_git_repos(base_path: Path):
     }
 
     for root, dirs, _files in os.walk(base_path):
-        if '.git' in dirs:
+        if '.git' in dirs or '.git' in _files:
             yield Path(root)
-            dirs.remove('.git')  # Do not traverse inside .git directory
+            if '.git' in dirs:
+                dirs.remove('.git')  # Do not traverse inside .git directory
 
         # Prune ignored directories from traversal
         dirs[:] = [d for d in dirs if d not in ignore_dirs]
@@ -231,7 +234,9 @@ console = Console()
 def scan(
     # ➔ FIX: Default to "." (current directory) if no argument is provided
     directory: str = typer.Argument(".", help="Target directory to scan (defaults to current directory)"),
-    interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI")
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI"),
+    export_json: str = typer.Option(None, "--export-json", help="Export findings to JSON file"),
+    export_csv: str = typer.Option(None, "--export-csv", help="Export findings to CSV file")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
     base_path = Path(directory).expanduser().resolve()
@@ -280,6 +285,27 @@ def scan(
         )
 
     console.print(table)
+
+    if export_json:
+        try:
+            with open(export_json, 'w', encoding='utf-8') as f:
+                json_data = [{**r, 'path': str(r['path'])} for r in dirty_repos]
+                json.dump(json_data, f, indent=4)
+            rprint(f"[bold green]✅ Exported JSON results to {export_json}[/bold green]")
+        except Exception as e:
+            rprint(f"[bold red]❌ Failed to export JSON: {e}[/bold red]")
+
+    if export_csv:
+        try:
+            with open(export_csv, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Repository Path", "Branch", "Modified", "Untracked"])
+                for r in dirty_repos:
+                    writer.writerow([str(r["path"]), r["branch"], r["modified"], r["untracked"]])
+            rprint(f"[bold green]✅ Exported CSV results to {export_csv}[/bold green]")
+        except Exception as e:
+            rprint(f"[bold red]❌ Failed to export CSV: {e}[/bold red]")
+
 
 if __name__ == "__main__":
     app()
