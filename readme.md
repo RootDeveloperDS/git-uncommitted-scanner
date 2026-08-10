@@ -40,6 +40,12 @@ scanrepos
 
 # Scan a specific directory path
 scanrepos /path/to/your/projects
+
+# Export findings to JSON
+scanrepos /path/to/your/projects --export-json results.json
+
+# Export findings to CSV
+scanrepos /path/to/your/projects --export-csv results.csv
 ```
 
 ### 2. Interactive TUI Mode (`-i`)
@@ -66,6 +72,8 @@ scanrepos -i /path/to/your/projects
 * **Dual Interface**: Choice between concise CLI tabular output and full interactive TUI.
 * **High-Tech Neon-Cyan Aesthetics**: Built with customized `Textual` components and `Rich` console formatting.
 * **OS-Aware Terminal Launcher**: Select an uncommitted repository in the TUI and instantly launch a native shell running `git status` inside that folder (supports Windows, macOS, and Linux).
+* **Export Options**: Export scan results directly to JSON or CSV formats using CLI flags `--export-json` or `--export-csv` for CI/CD integration.
+* **Submodule Detection**: Identifies Git submodules (where `.git` is a file instead of a directory) that contain uncommitted changes.
 * **Zero Dependencies Bloat**: Built purely on Python standard libraries alongside `typer`, `rich`, and `textual`.
 
 ---

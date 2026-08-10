@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### 🚀 Added
+- **Export Options**: Added `--export-json` and `--export-csv` CLI flags to allow exporting scan results for CI/CD integration and automated reporting.
+- **Submodule Detection**: Updated repository traversal logic to detect `.git` submodules (which appear as files) and correctly scan them for uncommitted changes.
+
+---
+
 ## [0.1.3] - 2026-08-07
 
 ### 🚀 Added
