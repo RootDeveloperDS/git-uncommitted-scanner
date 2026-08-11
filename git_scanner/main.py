@@ -1,6 +1,7 @@
 import sys
 import os
 import subprocess
+import json
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 
@@ -247,7 +248,8 @@ console = Console()
 def scan(
     # ➔ FIX: Default to "." (current directory) if no argument is provided
     directory: str = typer.Argument(".", help="Target directory to scan (defaults to current directory)"),
-    interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI")
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI"),
+    export_json: str = typer.Option(None, "--export-json", help="Export the uncommitted repositories list to a JSON file")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
     base_path = Path(directory).expanduser().resolve()
@@ -278,6 +280,22 @@ def scan(
     if not dirty_repos:
         rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
         return
+
+    if export_json:
+        try:
+            with open(export_json, 'w', encoding='utf-8') as f:
+                # Convert Path objects to strings before serialization
+                serializable_repos = []
+                for repo in dirty_repos:
+                    serializable_repo = dict(repo)
+                    serializable_repo['path'] = str(serializable_repo['path'])
+                    serializable_repos.append(serializable_repo)
+                json.dump(serializable_repos, f, indent=4)
+            rprint(f"[bold green]✅ Successfully exported results to {export_json}[/bold green]")
+            return
+        except Exception as e:
+            rprint(f"[bold red]❌ Failed to export JSON:[/bold red] {e}")
+            raise typer.Exit(code=1)
 
     table = Table(title="Uncommitted Repositories", show_header=True, header_style="bold magenta")
     table.add_column("No.", style="dim", width=4)
