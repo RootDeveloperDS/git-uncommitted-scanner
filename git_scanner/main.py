@@ -41,13 +41,25 @@ def find_git_repos(base_path: Path):
         '.tox', 'build', 'dist', 'target', '.idea', '.vscode'
     }
 
-    for root, dirs, _files in os.walk(base_path):
-        if '.git' in dirs:
-            yield Path(root)
-            dirs.remove('.git')  # Do not traverse inside .git directory
+    stack = [str(base_path)]
+    while stack:
+        current_path = stack.pop()
+        try:
+            with os.scandir(current_path) as it:
+                subdirs = []
+                has_git = False
+                for entry in it:
+                    if entry.name == '.git':
+                        has_git = True
+                    elif entry.is_dir(follow_symlinks=False) and entry.name not in ignore_dirs:
+                        subdirs.append(entry.path)
 
-        # Prune ignored directories from traversal
-        dirs[:] = [d for d in dirs if d not in ignore_dirs]
+                if has_git:
+                    yield Path(current_path)
+
+                stack.extend(subdirs)
+        except (PermissionError, FileNotFoundError):
+            continue
 
 
 def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
