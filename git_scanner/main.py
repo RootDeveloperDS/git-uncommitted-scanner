@@ -41,35 +41,63 @@ def find_git_repos(base_path: Path):
         '.tox', 'build', 'dist', 'target', '.idea', '.vscode'
     }
 
-    for root, dirs, _files in os.walk(base_path):
-        if '.git' in dirs:
-            yield Path(root)
-            dirs.remove('.git')  # Do not traverse inside .git directory
+    dirs_to_visit = [base_path]
+    while dirs_to_visit:
+        current = dirs_to_visit.pop()
+        try:
+            with os.scandir(current) as it:
+                is_repo = False
+                subdirs = []
+                for entry in it:
+                    if entry.name == '.git':
+                        is_repo = True
+                    elif entry.is_dir(follow_symlinks=False) and entry.name not in ignore_dirs:
+                        subdirs.append(Path(entry.path))
 
-        # Prune ignored directories from traversal
-        dirs[:] = [d for d in dirs if d not in ignore_dirs]
+                if is_repo:
+                    yield Path(current)
+                dirs_to_visit.extend(subdirs)
+        except PermissionError:
+            pass
 
 
 def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
     """Checks if a git repo has uncommitted changes and returns status details."""
     try:
         status_result = subprocess.run(
-            ['git', 'status', '--porcelain'],
+            ['git', 'status', '--porcelain', '-b'],
             cwd=repo_path, capture_output=True, text=True, check=True
         )
         output = status_result.stdout.strip()
-        if not output:
+        lines = [line for line in output.split('\n') if line]
+
+        if not lines:
             return None
 
-        branch_result = subprocess.run(
-            ['git', 'branch', '--show-current'],
-            cwd=repo_path, capture_output=True, text=True, check=True
-        )
-        branch = branch_result.stdout.strip() or "HEAD"
+        branch_line = lines[0]
+        if branch_line.startswith('## '):
+            if len(lines) == 1:
+                return None  # Only branch info, no uncommitted changes
 
-        lines = [line for line in output.split('\n') if line]
-        untracked = sum(1 for line in lines if line.startswith('??'))
-        modified = len(lines) - untracked
+            branch_info = branch_line[3:]
+            if branch_info.startswith('No commits yet on '):
+                branch = branch_info[18:]
+            elif branch_info.startswith('HEAD (no branch)'):
+                branch = "HEAD"
+            else:
+                branch = branch_info.split('...')[0].strip()
+
+            status_lines = lines[1:]
+        else:
+            branch = "HEAD"
+            status_lines = lines
+
+        untracked = sum(1 for line in status_lines if line.startswith('??'))
+        modified = len(status_lines) - untracked
+
+        # If there are actually no changes (shouldn't happen with the len check above, but safe)
+        if untracked == 0 and modified == 0:
+            return None
 
         return {
             'path': repo_path,
