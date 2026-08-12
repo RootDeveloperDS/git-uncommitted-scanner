@@ -11,28 +11,36 @@ from rich.table import Table
 from rich import print as rprint
 from textual import on
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, DataTable, Label, LoadingIndicator
+from textual.widgets import Header, Footer, DataTable, Label, LoadingIndicator, Input
 from textual.binding import Binding
 from textual.worker import get_current_worker
 
 # ---------------------------------------------------------
 # CORE LOGIC
 # ---------------------------------------------------------
-def truncate_path(path_obj: Path, max_length: int = 50) -> str:
-    """Helper to truncate very long repository paths for cleaner UI rendering."""
+def truncate_path(path_obj: Path, max_length: int = 85, min_length: int = 20) -> str:
+    """Helper to truncate very long repository paths with ellipses while enforcing a minimum visibility limit."""
     path_str = str(path_obj)
-    if len(path_str) <= max_length:
+    
+    # Ensure max_length never drops below min_length so the path column is never hidden
+    effective_max = max(max_length, min_length)
+
+    if len(path_str) <= effective_max:
         return path_str
 
     parts = path_obj.parts
     if len(parts) > 3:
-        # Keep first part (e.g. '/' or 'C:\') and last two parts
+        # Format as: C:\...\last_folder or /.../last_folder
         truncated = str(Path(parts[0], "...", *parts[-2:]))
-        if len(truncated) <= max_length:
+        if len(truncated) <= effective_max:
             return truncated
 
-    # Fallback to simple string truncation
-    return "..." + path_str[-(max_length - 3):]
+    if len(parts) > 1:
+        # Show first part + "..." + end of path
+        suffix_len = max(5, effective_max - len(parts[0]) - 4)
+        return f"{parts[0]}...\\{path_str[-suffix_len:]}"
+
+    return "..." + path_str[-(effective_max - 3):]
 
 
 def find_git_repos(
@@ -157,6 +165,15 @@ class GitScannerTUI(App):
     DataTable > .datatable--header { background: #004444; color: #00ffff; text-style: bold; }
     DataTable > .datatable--cursor { background: #00ffff; color: #000000; text-style: bold; }
     
+    #search-input {
+        dock: top;
+        margin: 0 2;
+        border: round #00ffff;
+        background: #051515;
+        color: #e0ffff;
+        display: none;
+    }
+
     #status-bar {
         dock: bottom;
         height: 3;
@@ -172,6 +189,7 @@ class GitScannerTUI(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("o", "open_terminal", "Open Workspace (o/Enter/DblClick)"),
+        Binding("slash", "toggle_search", "Search/Filter"),
         Binding("r", "refresh_scan", "Refresh Scan")
     ]
 
@@ -185,9 +203,11 @@ class GitScannerTUI(App):
         self.target_dir = target_dir
         self.exclude = exclude
         self.max_depth = max_depth
+        self.current_repos: List[Dict[str, Any]] = []
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        yield Input(placeholder="🔍 Type to filter repositories by path or branch...", id="search-input")
         yield LoadingIndicator(id="loader")
         yield DataTable(id="repo_table")
         yield Label("INITIALIZING SYSTEM...", id="status-bar")
@@ -197,6 +217,7 @@ class GitScannerTUI(App):
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
+        table.expand = True  # Spreads columns evenly across full screen width
         table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
         self.action_refresh_scan()
 
@@ -224,29 +245,88 @@ class GitScannerTUI(App):
                 
         self.call_from_thread(self.update_table, dirty_repos)
 
-    def update_table(self, repos: List[Dict[str, Any]]) -> None:
+    def _render_table_rows(self, repos_to_render: List[Dict[str, Any]]) -> None:
         table = self.query_one(DataTable)
-        loader = self.query_one("#loader", LoadingIndicator)
-        status = self.query_one("#status-bar", Label)
-        
         table.clear()
-        loader.display = False
-        table.display = True
-        
-        if not repos:
-            status.update("✅ ALL REPOSITORIES SECURED AND COMMITTED")
-            return
-            
-        status.update(f"⚠️ DETECTED {len(repos)} REPOSITORIES REQUIRING ATTENTION")
-        for idx, repo in enumerate(repos, 1):
+
+        # Calculate dynamic max path length based on current screen width with a min floor of 20 chars
+        screen_width = self.size.width if self.size and self.size.width > 0 else 100
+        dynamic_max_len = max(20, screen_width - 45)
+
+        for idx, repo in enumerate(repos_to_render, 1):
             table.add_row(
                 str(idx),
-                truncate_path(repo['path']),
+                truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
                 str(repo['branch']),
                 str(repo['modified']),
                 str(repo['untracked']),
                 key=str(repo['path'])
             )
+
+    def on_resize(self, event) -> None:
+        """Dynamically re-render table rows when window size changes."""
+        if hasattr(self, 'current_repos') and self.current_repos:
+            search_input = self.query_one("#search-input", Input)
+            search_term = search_input.value.lower() if search_input.display else ""
+            if search_term:
+                filtered = [
+                    repo for repo in self.current_repos
+                    if search_term in str(repo['path']).lower() or search_term in str(repo['branch']).lower()
+                ]
+                self._render_table_rows(filtered)
+            else:
+                self._render_table_rows(self.current_repos)
+
+    def update_table(self, repos: List[Dict[str, Any]]) -> None:
+        self.current_repos = repos
+        table = self.query_one(DataTable)
+        loader = self.query_one("#loader", LoadingIndicator)
+        status = self.query_one("#status-bar", Label)
+        
+        loader.display = False
+        table.display = True
+        
+        if not repos:
+            table.clear()
+            status.update("✅ ALL REPOSITORIES SECURED AND COMMITTED")
+            return
+            
+        status.update(f"⚠️ DETECTED {len(repos)} REPOSITORIES REQUIRING ATTENTION")
+
+        # Re-apply active search filter if input is visible
+        search_input = self.query_one("#search-input", Input)
+        search_term = search_input.value.lower() if search_input.display else ""
+        if search_term:
+            filtered = [
+                repo for repo in self.current_repos
+                if search_term in str(repo['path']).lower() or search_term in str(repo['branch']).lower()
+            ]
+            self._render_table_rows(filtered)
+        else:
+            self._render_table_rows(repos)
+
+    def action_toggle_search(self) -> None:
+        search_input = self.query_one("#search-input", Input)
+        if search_input.display:
+            search_input.display = False
+            search_input.value = ""
+            self.query_one(DataTable).focus()
+            self._render_table_rows(self.current_repos)
+        else:
+            search_input.display = True
+            search_input.focus()
+
+    @on(Input.Changed, "#search-input")
+    def handle_search_changed(self, event: Input.Changed) -> None:
+        search_term = event.value.lower()
+        if not search_term:
+            filtered = self.current_repos
+        else:
+            filtered = [
+                repo for repo in self.current_repos
+                if search_term in str(repo['path']).lower() or search_term in str(repo['branch']).lower()
+            ]
+        self._render_table_rows(filtered)
 
     def action_open_terminal(self) -> None:
         table = self.query_one(DataTable)
