@@ -56,6 +56,7 @@ scanrepos -i /path/to/your/projects
 #### TUI Keyboard Controls:
 * <kbd>o</kbd> : Spawn native OS terminal (`cmd`, `Terminal.app`, `gnome-terminal`, `alacritty`, etc.) in the selected repository.
 * <kbd>r</kbd> : Trigger an asynchronous re-scan of the target folder.
+* <kbd>s</kbd> : Sort the table by the number of uncommitted 'Modified' files in descending order.
 * <kbd>q</kbd> : Quit the application.
 
 ---
