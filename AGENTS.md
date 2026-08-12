@@ -80,3 +80,5 @@ When creating a Pull Request or submitting code changes, you MUST structure the 
 3. **Verification**: State tests run or how you verified this won't break existing IPC/UI threads.
 
 4. **Clean Artifacts**: NEVER commit `.patch`, `.log`, or `.tmp` files.
+
+5. **Update documentations**: always update any Documentation, when ever new feature is added or any functionality changes.
