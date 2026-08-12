@@ -158,7 +158,8 @@ class GitScannerTUI(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("o", "open_terminal", "Open Workspace (o/Enter/DblClick)"),
-        Binding("r", "refresh_scan", "Refresh Scan")
+        Binding("r", "refresh_scan", "Refresh Scan"),
+        Binding("s", "sort_modified", "Sort by Modified")
     ]
 
     def __init__(self, target_dir: Path):
@@ -176,8 +177,15 @@ class GitScannerTUI(App):
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
-        table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
+        self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
         self.action_refresh_scan()
+
+    def action_sort_modified(self) -> None:
+        """Sorts the DataTable by the 'Modified' column."""
+        table = self.query_one(DataTable)
+        # Sort by the 4th column (index 3) which is "Modified"
+        table.sort(self.col_keys[3], key=lambda x: int(x) if str(x).isdigit() else 0, reverse=True)
+        self.notify("Sorted by Modified count")
 
     def action_refresh_scan(self) -> None:
         """Triggers the UI loading state and starts the background worker."""
