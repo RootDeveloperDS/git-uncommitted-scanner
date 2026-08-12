@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.4] - 2026-08-12
+
+### ⚡ Performance (Bolt ⚡)
+- **Single Subprocess Status Parsing**: Refactored status check to use `git status --porcelain -b`. Retrieves branch name, modified file count, and untracked file count in a single subprocess call, cutting git execution overhead by 50%.
+- **`os.scandir` Traversal Pruning**: High-speed directory scanner automatically skips heavy folders (`node_modules`, `.venv`, `build`, `dist`, `.tox`, etc.) without entering `.git` directories.
+
+### 🚀 Features (Evo 🚀)
+- **Advanced Path Filtering**: Added `--max-depth` (`-d`) to limit search depth and `--exclude` (`-e`) for custom folder exclusions across CLI and TUI modes.
+- **Git Submodule Support**: Added detection for `.git` files (submodules) alongside `.git` directories.
+- **JSON Data Export**: Added `--export <path.json>` flag to save scan results to structured JSON format.
+
+### 🎨 User Experience (Palette 🎨)
+- **TUI Ergonomics**: Added <kbd>Enter</kbd> key and double-click row selection (`@on(DataTable.RowSelected)`) to launch native terminals directly from the TUI.
+- **Visual Feedback**: Added non-intrusive toast notifications when spawning terminals and automatic path truncation for long workspace directories.
+- **Cross-Platform Fixes**: Reconfigured UTF-8 console output to prevent legacy Windows `cmd.exe` codepage encoding crashes.
+
+---
+
 ## [0.1.3] - 2026-08-07
 
 ### 🚀 Added
