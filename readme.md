@@ -40,6 +40,9 @@ scanrepos
 
 # Scan a specific directory path
 scanrepos /path/to/your/projects
+
+# Export results directly to a JSON file
+scanrepos /path/to/your/projects --export-json results.json
 ```
 
 ### 2. Interactive TUI Mode (`-i`)

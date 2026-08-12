@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### 🚀 Added
+- **JSON Export CLI Flag**: Added `--export-json` option to the main CLI, allowing users to dump uncommitted repository scan results into a valid JSON file.
+
 ## [0.1.3] - 2026-08-07
 
 ### 🚀 Added
