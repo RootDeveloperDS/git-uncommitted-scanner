@@ -34,16 +34,18 @@ def truncate_path(path_obj: Path, max_length: int = 50) -> str:
     return "..." + path_str[-(max_length - 3):]
 
 
-def find_git_repos(base_path: Path):
+def find_git_repos(base_path: Path, exclude: Optional[List[str]] = None, max_depth: Optional[int] = None):
     """Optimized directory traversal to find git repositories."""
     ignore_dirs = {
         'node_modules', '.venv', 'venv', 'env', '.env',
         '.tox', 'build', 'dist', 'target', '.idea', '.vscode'
     }
+    if exclude:
+        ignore_dirs.update(exclude)
 
-    stack = [str(base_path)]
+    stack = [(str(base_path), 0)]
     while stack:
-        current_path = stack.pop()
+        current_path, current_depth = stack.pop()
         try:
             with os.scandir(current_path) as it:
                 subdirs = []
@@ -57,7 +59,8 @@ def find_git_repos(base_path: Path):
                 if has_git:
                     yield Path(current_path)
 
-                stack.extend(subdirs)
+                if max_depth is None or current_depth < max_depth:
+                    stack.extend((subdir, current_depth + 1) for subdir in subdirs)
         except (PermissionError, FileNotFoundError):
             continue
 
@@ -161,9 +164,11 @@ class GitScannerTUI(App):
         Binding("r", "refresh_scan", "Refresh Scan")
     ]
 
-    def __init__(self, target_dir: Path):
+    def __init__(self, target_dir: Path, exclude: Optional[List[str]] = None, max_depth: Optional[int] = None):
         super().__init__()
         self.target_dir = target_dir
+        self.exclude = exclude
+        self.max_depth = max_depth
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -194,7 +199,7 @@ class GitScannerTUI(App):
         worker = get_current_worker()
         dirty_repos = []
         
-        for repo_path in find_git_repos(self.target_dir):
+        for repo_path in find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth):
             if worker.is_cancelled: 
                 return
             details = get_repo_details(repo_path)
@@ -259,7 +264,9 @@ console = Console()
 def scan(
     # ➔ FIX: Default to "." (current directory) if no argument is provided
     directory: str = typer.Argument(".", help="Target directory to scan (defaults to current directory)"),
-    interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI")
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI"),
+    exclude: Optional[str] = typer.Option(None, "--exclude", "-e", help="Comma-separated list of directories to exclude"),
+    max_depth: Optional[int] = typer.Option(None, "--max-depth", "-d", help="Maximum depth for directory scanning")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
     base_path = Path(directory).expanduser().resolve()
@@ -268,10 +275,12 @@ def scan(
         rprint(f"[bold red]❌ Error:[/bold red] Directory '{base_path}' does not exist.")
         raise typer.Exit(code=1)
 
+    exclude_list = [x.strip() for x in exclude.split(",")] if exclude else None
+
     # Route 1: TUI Mode
     if interactive:
         try:
-            tui_app = GitScannerTUI(base_path)
+            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=max_depth)
             tui_app.run()
             rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
         except Exception as e:
@@ -282,7 +291,7 @@ def scan(
     # Route 2: CLI Mode
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
         dirty_repos = []
-        for repo_path in find_git_repos(base_path):
+        for repo_path in find_git_repos(base_path, exclude=exclude_list, max_depth=max_depth):
             details = get_repo_details(repo_path)
             if details:
                 dirty_repos.append(details)
