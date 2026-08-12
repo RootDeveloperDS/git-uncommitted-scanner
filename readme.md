@@ -40,6 +40,12 @@ scanrepos
 
 # Scan a specific directory path
 scanrepos /path/to/your/projects
+
+# Ignore specific directories (e.g. node_modules, build)
+scanrepos /path/to/your/projects --exclude node_modules,build
+
+# Limit the directory scanning depth
+scanrepos /path/to/your/projects --max-depth 3
 ```
 
 ### 2. Interactive TUI Mode (`-i`)
@@ -51,6 +57,9 @@ scanrepos -i
 
 # Launch TUI for a specific path
 scanrepos -i /path/to/your/projects
+
+# Launch TUI with filters
+scanrepos -i /path/to/your/projects --exclude node_modules --max-depth 2
 ```
 
 #### TUI Keyboard Controls:
