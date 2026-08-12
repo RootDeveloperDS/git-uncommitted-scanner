@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import subprocess
 from pathlib import Path
 from typing import Optional, Dict, List, Any
@@ -34,22 +35,29 @@ def truncate_path(path_obj: Path, max_length: int = 50) -> str:
     return "..." + path_str[-(max_length - 3):]
 
 
-def find_git_repos(base_path: Path):
+def find_git_repos(
+    base_path: Path,
+    exclude: Optional[List[str]] = None,
+    max_depth: Optional[int] = None
+):
     """Optimized directory traversal to find git repositories."""
     ignore_dirs = {
         'node_modules', '.venv', 'venv', 'env', '.env',
         '.tox', 'build', 'dist', 'target', '.idea', '.vscode'
     }
+    if exclude:
+        ignore_dirs.update(d.strip() for d in exclude if d.strip())
 
-    stack = [str(base_path)]
+    stack = [(str(base_path), 0)]
     while stack:
-        current_path = stack.pop()
+        current_path, depth = stack.pop()
         try:
             with os.scandir(current_path) as it:
                 subdirs = []
                 has_git = False
                 for entry in it:
                     if entry.name == '.git':
+                        # Explicitly handles both .git directories and .git files (submodules)
                         has_git = True
                     elif entry.is_dir(follow_symlinks=False) and entry.name not in ignore_dirs:
                         subdirs.append(entry.path)
@@ -57,29 +65,35 @@ def find_git_repos(base_path: Path):
                 if has_git:
                     yield Path(current_path)
 
-                stack.extend(subdirs)
+                if max_depth is None or depth < max_depth:
+                    stack.extend((subdir, depth + 1) for subdir in subdirs)
         except (PermissionError, FileNotFoundError):
             continue
 
 
 def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
-    """Checks if a git repo has uncommitted changes and returns status details."""
+    """Checks if a git repo has uncommitted changes and returns status details in a single git subprocess call."""
     try:
         status_result = subprocess.run(
-            ['git', 'status', '--porcelain'],
+            ['git', 'status', '--porcelain', '-b'],
             cwd=repo_path, capture_output=True, text=True, check=True
         )
         output = status_result.stdout.strip()
-        if not output:
+        lines = [line for line in output.split('\n') if line]
+        if not lines:
             return None
 
-        branch_result = subprocess.run(
-            ['git', 'branch', '--show-current'],
-            cwd=repo_path, capture_output=True, text=True, check=True
-        )
-        branch = branch_result.stdout.strip() or "HEAD"
+        branch = "HEAD"
+        if lines and lines[0].startswith('## '):
+            branch_line = lines[0][3:]
+            branch = branch_line.split('...')[0].strip()
+            if branch.startswith('No commits yet on '):
+                branch = branch.replace('No commits yet on ', '')
+            lines = lines[1:]
 
-        lines = [line for line in output.split('\n') if line]
+        if not lines:
+            return None
+
         untracked = sum(1 for line in lines if line.startswith('??'))
         modified = len(lines) - untracked
 
@@ -161,9 +175,16 @@ class GitScannerTUI(App):
         Binding("r", "refresh_scan", "Refresh Scan")
     ]
 
-    def __init__(self, target_dir: Path):
+    def __init__(
+        self,
+        target_dir: Path,
+        exclude: Optional[List[str]] = None,
+        max_depth: Optional[int] = None
+    ):
         super().__init__()
         self.target_dir = target_dir
+        self.exclude = exclude
+        self.max_depth = max_depth
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -194,7 +215,7 @@ class GitScannerTUI(App):
         worker = get_current_worker()
         dirty_repos = []
         
-        for repo_path in find_git_repos(self.target_dir):
+        for repo_path in find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth):
             if worker.is_cancelled: 
                 return
             details = get_repo_details(repo_path)
@@ -257,9 +278,11 @@ console = Console()
 
 @app.command()
 def scan(
-    # ➔ FIX: Default to "." (current directory) if no argument is provided
     directory: str = typer.Argument(".", help="Target directory to scan (defaults to current directory)"),
-    interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI")
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI"),
+    exclude: Optional[str] = typer.Option(None, "--exclude", "-e", help="Comma-separated list of directory names to exclude"),
+    max_depth: Optional[int] = typer.Option(None, "--max-depth", "-d", help="Maximum directory depth to traverse"),
+    export: Optional[str] = typer.Option(None, "--export", help="Export scan results as JSON to specified file path")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
     base_path = Path(directory).expanduser().resolve()
@@ -268,10 +291,12 @@ def scan(
         rprint(f"[bold red]❌ Error:[/bold red] Directory '{base_path}' does not exist.")
         raise typer.Exit(code=1)
 
+    exclude_list = [item.strip() for item in exclude.split(',')] if exclude else None
+
     # Route 1: TUI Mode
     if interactive:
         try:
-            tui_app = GitScannerTUI(base_path)
+            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=max_depth)
             tui_app.run()
             rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
         except Exception as e:
@@ -282,7 +307,7 @@ def scan(
     # Route 2: CLI Mode
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
         dirty_repos = []
-        for repo_path in find_git_repos(base_path):
+        for repo_path in find_git_repos(base_path, exclude=exclude_list, max_depth=max_depth):
             details = get_repo_details(repo_path)
             if details:
                 dirty_repos.append(details)
@@ -290,6 +315,20 @@ def scan(
     if not dirty_repos:
         rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
         return
+
+    if export:
+        export_data = [
+            {
+                "path": str(repo['path']),
+                "branch": repo['branch'],
+                "modified": repo['modified'],
+                "untracked": repo['untracked']
+            }
+            for repo in dirty_repos
+        ]
+        export_file = Path(export)
+        export_file.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
+        rprint(f"[bold green]📄 Exported scan results ({len(dirty_repos)} repos) to {export_file.resolve()}[/bold green]")
 
     table = Table(title="Uncommitted Repositories", show_header=True, header_style="bold magenta")
     table.add_column("No.", style="dim", width=4)
