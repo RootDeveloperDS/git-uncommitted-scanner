@@ -190,7 +190,8 @@ class GitScannerTUI(App):
         Binding("q", "quit", "Quit"),
         Binding("o", "open_terminal", "Open Workspace (o/Enter/DblClick)"),
         Binding("slash", "toggle_search", "Search/Filter"),
-        Binding("r", "refresh_scan", "Refresh Scan")
+        Binding("r", "refresh_scan", "Refresh Scan"),
+        Binding("s", "sort_table", "Sort (Mod/Untracked)")
     ]
 
     def __init__(
@@ -204,6 +205,8 @@ class GitScannerTUI(App):
         self.exclude = exclude
         self.max_depth = max_depth
         self.current_repos: List[Dict[str, Any]] = []
+        self.current_sort_col = None
+        self.current_sort_reverse = True
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -218,7 +221,7 @@ class GitScannerTUI(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
-        table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
+        self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -262,6 +265,56 @@ class GitScannerTUI(App):
                 str(repo['untracked']),
                 key=str(repo['path'])
             )
+
+        if self.current_sort_col is not None:
+            self._apply_sort()
+
+    def _apply_sort(self) -> None:
+        table = self.query_one(DataTable)
+
+        def sort_key(val):
+            try:
+                return float(val)
+            except ValueError:
+                return str(val).lower()
+
+        table.sort(self.current_sort_col, key=sort_key, reverse=self.current_sort_reverse)
+
+    @on(DataTable.HeaderSelected)
+    def handle_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        if self.current_sort_col == event.column_key:
+            self.current_sort_reverse = not self.current_sort_reverse
+        else:
+            self.current_sort_col = event.column_key
+            self.current_sort_reverse = True
+        self._apply_sort()
+
+    def action_sort_table(self) -> None:
+        # Cycle sorting: Modified -> Untracked -> Clear Sort
+        if self.current_sort_col == self.col_keys[3]:  # Modified
+            self.current_sort_col = self.col_keys[4]   # Untracked
+            self.current_sort_reverse = True
+        elif self.current_sort_col == self.col_keys[4]: # Untracked
+            self.current_sort_col = None
+            self.current_sort_reverse = False
+        else:
+            self.current_sort_col = self.col_keys[3]   # Modified
+            self.current_sort_reverse = True
+
+        if self.current_sort_col:
+            self._apply_sort()
+        else:
+            # Clear sort means resetting to default order
+            search_input = self.query_one("#search-input", Input)
+            search_term = search_input.value.lower() if search_input.display else ""
+            if search_term:
+                filtered = [
+                    repo for repo in self.current_repos
+                    if search_term in str(repo['path']).lower() or search_term in str(repo['branch']).lower()
+                ]
+                self._render_table_rows(filtered)
+            else:
+                self._render_table_rows(self.current_repos)
 
     def on_resize(self, event) -> None:
         """Dynamically re-render table rows when window size changes."""
