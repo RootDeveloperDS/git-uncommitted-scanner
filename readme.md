@@ -51,7 +51,27 @@ scanrepos /path/to/projects -e "vendor,build"
 scanrepos /path/to/projects --export scan_results.json
 ```
 
-### 2. Interactive TUI Mode (`-i`)
+### 2. Configuration File Support
+You can configure default scan options by creating a `.gitscannerrc` (JSON format) in your home directory, local directory, or by adding a `[tool.gitscanner]` section in `pyproject.toml`.
+
+Example `.gitscannerrc`:
+```json
+{
+  "exclude": "node_modules,build,vendor",
+  "max_depth": 3,
+  "export": "scan_results.json"
+}
+```
+
+Example `pyproject.toml`:
+```toml
+[tool.gitscanner]
+exclude = "node_modules,build,vendor"
+max_depth = 3
+export = "scan_results.json"
+```
+
+### 3. Interactive TUI Mode (`-i`)
 Launch the Neon-Cyan Terminal User Interface. Navigate repositories with keyboard arrows, double-click or press <kbd>Enter</kbd> to spawn a native shell terminal directly inside the highlighted workspace.
 
 ```bash

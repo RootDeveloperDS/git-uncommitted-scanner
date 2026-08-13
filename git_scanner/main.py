@@ -350,8 +350,66 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
+
+import re
+
+def load_scan_config(base_path: Path) -> Dict[str, Any]:
+    """Loads configuration from ~/.gitscannerrc, local .gitscannerrc, or pyproject.toml."""
+    config = {}
+
+    # 1. Check home directory for .gitscannerrc
+    home_config = Path.home() / ".gitscannerrc"
+    if home_config.is_file():
+        try:
+            config.update(json.loads(home_config.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+
+    # 2. Check local directory for .gitscannerrc
+    local_config = base_path / ".gitscannerrc"
+    if local_config.is_file():
+        try:
+            config.update(json.loads(local_config.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+
+    # 3. Check local directory for pyproject.toml
+    pyproject = base_path / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            content = pyproject.read_text(encoding="utf-8")
+            in_section = False
+            for line in content.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if line.startswith("["):
+                    in_section = (line == "[tool.gitscanner]")
+                    continue
+                if in_section and "=" in line:
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip()
+
+                    if key in ("exclude", "export"):
+                        val = re.sub(r'^["\']|["\']$', '', val)
+                        config[key] = val
+                    elif key == "max_depth":
+                        if val.isdigit():
+                            config["max_depth"] = int(val)
+                        else:
+                            try:
+                                config["max_depth"] = int(val)
+                            except ValueError:
+                                pass
+        except Exception:
+            pass
+
+    return config
+
 # ---------------------------------------------------------
 # CLI & ROUTING
+
 # ---------------------------------------------------------
 app = typer.Typer(help="Scan directories for uncommitted Git repositories.")
 console = Console()
@@ -370,6 +428,15 @@ def scan(
     if not base_path.exists() or not base_path.is_dir():
         rprint(f"[bold red]❌ Error:[/bold red] Directory '{base_path}' does not exist.")
         raise typer.Exit(code=1)
+
+    # Load file-based config fallbacks
+    config = load_scan_config(base_path)
+    if exclude is None and "exclude" in config:
+        exclude = config["exclude"]
+    if max_depth is None and "max_depth" in config:
+        max_depth = config["max_depth"]
+    if export is None and "export" in config:
+        export = config["export"]
 
     exclude_list = [item.strip() for item in exclude.split(',')] if exclude else None
 
