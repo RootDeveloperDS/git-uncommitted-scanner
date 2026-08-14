@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import subprocess
+import concurrent.futures
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 
@@ -236,14 +237,25 @@ class GitScannerTUI(App):
         worker = get_current_worker()
         dirty_repos = []
         
-        for repo_path in find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth):
-            if worker.is_cancelled: 
-                return
-            details = get_repo_details(repo_path)
-            if details:
-                dirty_repos.append(details)
-                
-        self.call_from_thread(self.update_table, dirty_repos)
+        executor = concurrent.futures.ThreadPoolExecutor()
+        try:
+            future_to_path = {}
+            for repo_path in find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth):
+                if worker.is_cancelled:
+                    return
+                future = executor.submit(get_repo_details, repo_path)
+                future_to_path[future] = repo_path
+
+            for future in concurrent.futures.as_completed(future_to_path):
+                if worker.is_cancelled:
+                    return
+                details = future.result()
+                if details:
+                    dirty_repos.append(details)
+
+            self.call_from_thread(self.update_table, dirty_repos)
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
     def _render_table_rows(self, repos_to_render: List[Dict[str, Any]]) -> None:
         table = self.query_one(DataTable)
@@ -387,10 +399,15 @@ def scan(
     # Route 2: CLI Mode
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
         dirty_repos = []
-        for repo_path in find_git_repos(base_path, exclude=exclude_list, max_depth=max_depth):
-            details = get_repo_details(repo_path)
-            if details:
-                dirty_repos.append(details)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(get_repo_details, repo_path)
+                for repo_path in find_git_repos(base_path, exclude=exclude_list, max_depth=max_depth)
+            ]
+            for future in concurrent.futures.as_completed(futures):
+                details = future.result()
+                if details:
+                    dirty_repos.append(details)
 
     if not dirty_repos:
         rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
