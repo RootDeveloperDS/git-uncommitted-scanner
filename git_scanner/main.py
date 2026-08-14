@@ -350,6 +350,61 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
+import configparser
+
+def parse_toml_section(content: str, section_name: str) -> Dict[str, Any]:
+    config = {}
+    in_section = False
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if line.startswith('[') and line.endswith(']'):
+            in_section = (line == f'[{section_name}]')
+            continue
+        if in_section and '=' in line:
+            key, val = line.split('=', 1)
+            key = key.strip()
+            val = val.strip()
+            if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                val = val[1:-1]
+            elif val.lower() == 'true':
+                val = True
+            elif val.lower() == 'false':
+                val = False
+            elif val.isdigit():
+                val = int(val)
+            config[key] = val
+    return config
+
+def load_config(directory: Path) -> Dict[str, Any]:
+    config = {}
+
+    # 1. ~/.gitscannerrc
+    home_rc = Path.home() / ".gitscannerrc"
+    if home_rc.exists():
+        parser = configparser.ConfigParser()
+        parser.read(home_rc)
+        if parser.has_section("gitscanner"):
+            config.update(dict(parser.items("gitscanner")))
+
+    # 2. pyproject.toml
+    pyproject = directory / "pyproject.toml"
+    if pyproject.exists():
+        content = pyproject.read_text(encoding="utf-8")
+        toml_config = parse_toml_section(content, "tool.gitscanner")
+        config.update(toml_config)
+
+    # 3. ./.gitscannerrc in scan directory
+    local_rc = directory / ".gitscannerrc"
+    if local_rc.exists():
+        parser = configparser.ConfigParser()
+        parser.read(local_rc)
+        if parser.has_section("gitscanner"):
+            config.update(dict(parser.items("gitscanner")))
+
+    return config
+
 # ---------------------------------------------------------
 # CLI & ROUTING
 # ---------------------------------------------------------
@@ -371,12 +426,24 @@ def scan(
         rprint(f"[bold red]❌ Error:[/bold red] Directory '{base_path}' does not exist.")
         raise typer.Exit(code=1)
 
-    exclude_list = [item.strip() for item in exclude.split(',')] if exclude else None
+    config = load_config(base_path)
+
+    # CLI arguments take precedence over config files
+    final_exclude = exclude if exclude is not None else config.get("exclude")
+    exclude_list = [item.strip() for item in final_exclude.split(',')] if final_exclude else None
+
+    # Handle int conversion for max_depth from config if needed
+    final_max_depth = max_depth if max_depth is not None else config.get("max_depth")
+    if final_max_depth is not None:
+        try:
+            final_max_depth = int(final_max_depth)
+        except ValueError:
+            final_max_depth = None
 
     # Route 1: TUI Mode
     if interactive:
         try:
-            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=max_depth)
+            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=final_max_depth)
             tui_app.run()
             rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
         except Exception as e:
@@ -387,7 +454,7 @@ def scan(
     # Route 2: CLI Mode
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
         dirty_repos = []
-        for repo_path in find_git_repos(base_path, exclude=exclude_list, max_depth=max_depth):
+        for repo_path in find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth):
             details = get_repo_details(repo_path)
             if details:
                 dirty_repos.append(details)
