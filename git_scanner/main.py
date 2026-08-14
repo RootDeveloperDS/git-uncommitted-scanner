@@ -190,7 +190,8 @@ class GitScannerTUI(App):
         Binding("q", "quit", "Quit"),
         Binding("o", "open_terminal", "Open Workspace (o/Enter/DblClick)"),
         Binding("slash", "toggle_search", "Search/Filter"),
-        Binding("r", "refresh_scan", "Refresh Scan")
+        Binding("r", "refresh_scan", "Refresh Scan"),
+        Binding("s", "sort_modified", "Sort by Modified")
     ]
 
     def __init__(
@@ -218,8 +219,15 @@ class GitScannerTUI(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
-        table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
+        self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
+        self.sort_reverse = False
         self.action_refresh_scan()
+
+    def action_sort_modified(self) -> None:
+        """Sorts the table by the 'Modified' column."""
+        table = self.query_one(DataTable)
+        self.sort_reverse = not getattr(self, "sort_reverse", False)
+        table.sort(self.col_keys[3], reverse=self.sort_reverse, key=lambda x: int(x))
 
     def action_refresh_scan(self) -> None:
         """Triggers the UI loading state and starts the background worker."""
@@ -342,6 +350,18 @@ class GitScannerTUI(App):
     def handle_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle Enter key or double click on a row to open the terminal."""
         self.action_open_terminal()
+
+    @on(DataTable.HeaderSelected)
+    def handle_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Handle header click to sort columns."""
+        table = self.query_one(DataTable)
+        self.sort_reverse = not getattr(self, "sort_reverse", False)
+
+        # Sort using integer key for ID, Modified, and Untracked columns
+        if str(event.label) in ("ID", "Modified", "Untracked"):
+            table.sort(event.column_key, reverse=self.sort_reverse, key=lambda x: int(x))
+        else:
+            table.sort(event.column_key, reverse=self.sort_reverse)
 
 # Ensure UTF-8 output encoding for legacy Windows console compatibility
 if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
