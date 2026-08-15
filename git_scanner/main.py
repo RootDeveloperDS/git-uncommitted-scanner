@@ -2,7 +2,9 @@ import sys
 import os
 import json
 import subprocess
+import configparser
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, List, Any
 
 import typer
@@ -16,8 +18,72 @@ from textual.binding import Binding
 from textual.worker import get_current_worker
 
 # ---------------------------------------------------------
-# CORE LOGIC
+# CORE LOGIC & CONFIGURATION
 # ---------------------------------------------------------
+def load_config(base_path: Path) -> Dict[str, Any]:
+    """Loads configuration options from .gitscannerrc or pyproject.toml."""
+    config: Dict[str, Any] = {"exclude": [], "max_depth": None}
+
+    def parse_rc(file_path: Path):
+        try:
+            parser = configparser.ConfigParser()
+            parser.read(file_path, encoding="utf-8")
+            section = "gitscanner" if parser.has_section("gitscanner") else (
+                "tool.gitscanner" if parser.has_section("tool.gitscanner") else None
+            )
+            if section:
+                if parser.has_option(section, "exclude"):
+                    val = parser.get(section, "exclude")
+                    config["exclude"].extend([v.strip() for v in val.split(",") if v.strip()])
+                if parser.has_option(section, "max_depth"):
+                    config["max_depth"] = parser.getint(section, "max_depth")
+        except Exception:
+            pass
+
+    def parse_pyproject(file_path: Path):
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            in_section = False
+            for line in content.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if line.startswith("[") and line.endswith("]"):
+                    in_section = (line == "[tool.gitscanner]")
+                    continue
+                if in_section and "=" in line:
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip().strip("'").strip('"')
+                    if key == "exclude":
+                        cleaned = val.strip("[]")
+                        config["exclude"].extend([v.strip().strip("'").strip('"') for v in cleaned.split(",") if v.strip()])
+                    elif key == "max_depth":
+                        try:
+                            config["max_depth"] = int(val)
+                        except ValueError:
+                            pass
+        except Exception:
+            pass
+
+    home_rc = Path.home() / ".gitscannerrc"
+    if home_rc.exists():
+        parse_rc(home_rc)
+
+    local_pyproject = base_path / "pyproject.toml"
+    if local_pyproject.exists():
+        parse_pyproject(local_pyproject)
+
+    local_rc = base_path / ".gitscannerrc"
+    if local_rc.exists():
+        parse_rc(local_rc)
+
+    if config["exclude"]:
+        config["exclude"] = list(dict.fromkeys(config["exclude"]))
+
+    return config
+
+
 def truncate_path(path_obj: Path, max_length: int = 85, min_length: int = 20) -> str:
     """Helper to truncate very long repository paths with ellipses while enforcing a minimum visibility limit."""
     path_str = str(path_obj)
@@ -204,6 +270,8 @@ class GitScannerTUI(App):
         self.exclude = exclude
         self.max_depth = max_depth
         self.current_repos: List[Dict[str, Any]] = []
+        self.sort_column: Optional[int] = None
+        self.sort_reverse: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -236,12 +304,21 @@ class GitScannerTUI(App):
         worker = get_current_worker()
         dirty_repos = []
         
-        for repo_path in find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth):
-            if worker.is_cancelled: 
-                return
-            details = get_repo_details(repo_path)
-            if details:
-                dirty_repos.append(details)
+        repos = list(find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth))
+        if worker.is_cancelled:
+            return
+
+        executor = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4))
+        try:
+            futures = [executor.submit(get_repo_details, repo_path) for repo_path in repos]
+            for future in as_completed(futures):
+                if worker.is_cancelled:
+                    return
+                details = future.result()
+                if details:
+                    dirty_repos.append(details)
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
                 
         self.call_from_thread(self.update_table, dirty_repos)
 
@@ -249,11 +326,25 @@ class GitScannerTUI(App):
         table = self.query_one(DataTable)
         table.clear()
 
+        # Apply active sorting if column selected
+        sorted_repos = list(repos_to_render)
+        if self.sort_column is not None:
+            if self.sort_column == 0:  # ID
+                pass
+            elif self.sort_column == 1:  # Path
+                sorted_repos.sort(key=lambda r: str(r['path']).lower(), reverse=self.sort_reverse)
+            elif self.sort_column == 2:  # Branch
+                sorted_repos.sort(key=lambda r: str(r['branch']).lower(), reverse=self.sort_reverse)
+            elif self.sort_column == 3:  # Modified
+                sorted_repos.sort(key=lambda r: r['modified'], reverse=self.sort_reverse)
+            elif self.sort_column == 4:  # Untracked
+                sorted_repos.sort(key=lambda r: r['untracked'], reverse=self.sort_reverse)
+
         # Calculate dynamic max path length based on current screen width with a min floor of 20 chars
         screen_width = self.size.width if self.size and self.size.width > 0 else 100
         dynamic_max_len = max(20, screen_width - 45)
 
-        for idx, repo in enumerate(repos_to_render, 1):
+        for idx, repo in enumerate(sorted_repos, 1):
             table.add_row(
                 str(idx),
                 truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
@@ -328,6 +419,33 @@ class GitScannerTUI(App):
             ]
         self._render_table_rows(filtered)
 
+    @on(DataTable.HeaderSelected)
+    def handle_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Handle clicking column header to toggle sorting."""
+        column_index = event.column_index
+        col_names = ["ID", "Target", "Branch", "Modified", "Untracked"]
+        col_name = col_names[column_index] if column_index < len(col_names) else f"Column {column_index}"
+
+        if self.sort_column == column_index:
+            self.sort_reverse = not self.sort_reverse
+        else:
+            self.sort_column = column_index
+            self.sort_reverse = False
+
+        direction = "Descending (▼)" if self.sort_reverse else "Ascending (▲)"
+        self.notify(f"Sorted by {col_name} in {direction} order")
+
+        search_input = self.query_one("#search-input", Input)
+        search_term = search_input.value.lower() if search_input.display else ""
+        if search_term:
+            filtered = [
+                repo for repo in self.current_repos
+                if search_term in str(repo['path']).lower() or search_term in str(repo['branch']).lower()
+            ]
+            self._render_table_rows(filtered)
+        else:
+            self._render_table_rows(self.current_repos)
+
     def action_open_terminal(self) -> None:
         table = self.query_one(DataTable)
         try:
@@ -371,12 +489,19 @@ def scan(
         rprint(f"[bold red]❌ Error:[/bold red] Directory '{base_path}' does not exist.")
         raise typer.Exit(code=1)
 
-    exclude_list = [item.strip() for item in exclude.split(',')] if exclude else None
+    config = load_config(base_path)
+
+    exclude_list = list(config.get("exclude", []))
+    if exclude:
+        exclude_list.extend([item.strip() for item in exclude.split(',') if item.strip()])
+    exclude_list = list(dict.fromkeys(exclude_list)) if exclude_list else None
+
+    final_max_depth = max_depth if max_depth is not None else config.get("max_depth")
 
     # Route 1: TUI Mode
     if interactive:
         try:
-            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=max_depth)
+            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=final_max_depth)
             tui_app.run()
             rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
         except Exception as e:
@@ -386,11 +511,10 @@ def scan(
 
     # Route 2: CLI Mode
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
-        dirty_repos = []
-        for repo_path in find_git_repos(base_path, exclude=exclude_list, max_depth=max_depth):
-            details = get_repo_details(repo_path)
-            if details:
-                dirty_repos.append(details)
+        repos = list(find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth))
+        with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
+            results = executor.map(get_repo_details, repos)
+            dirty_repos = [r for r in results if r is not None]
 
     if not dirty_repos:
         rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
