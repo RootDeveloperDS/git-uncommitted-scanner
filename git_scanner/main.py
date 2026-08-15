@@ -190,7 +190,8 @@ class GitScannerTUI(App):
         Binding("q", "quit", "Quit"),
         Binding("o", "open_terminal", "Open Workspace (o/Enter/DblClick)"),
         Binding("slash", "toggle_search", "Search/Filter"),
-        Binding("r", "refresh_scan", "Refresh Scan")
+        Binding("r", "refresh_scan", "Refresh Scan"),
+        Binding("s", "toggle_sort", "Sort/Cycle")
     ]
 
     def __init__(
@@ -218,7 +219,8 @@ class GitScannerTUI(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
-        table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
+        self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
+        self.sort_state = 0
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -262,6 +264,9 @@ class GitScannerTUI(App):
                 str(repo['untracked']),
                 key=str(repo['path'])
             )
+
+        # Re-apply the user's active sort whenever rows are completely re-rendered
+        self._apply_sort()
 
     def on_resize(self, event) -> None:
         """Dynamically re-render table rows when window size changes."""
@@ -327,6 +332,27 @@ class GitScannerTUI(App):
                 if search_term in str(repo['path']).lower() or search_term in str(repo['branch']).lower()
             ]
         self._render_table_rows(filtered)
+
+    def _apply_sort(self) -> None:
+        table = self.query_one(DataTable)
+        if not hasattr(self, 'sort_state') or not hasattr(self, 'col_keys'):
+            return
+
+        if self.sort_state == 1:
+            table.sort(self.col_keys[1])
+        elif self.sort_state == 2:
+            table.sort(self.col_keys[3], key=lambda x: int(x), reverse=True)
+        elif self.sort_state == 3:
+            table.sort(self.col_keys[4], key=lambda x: int(x), reverse=True)
+        else:
+            table.sort(self.col_keys[0], key=lambda x: int(x))
+
+    def action_toggle_sort(self) -> None:
+        self.sort_state = (self.sort_state + 1) % 4
+        self._apply_sort()
+
+        sort_labels = ["ID", "Repository Path", "Modified (Desc)", "Untracked (Desc)"]
+        self.notify(f"📋 Sorted by: {sort_labels[self.sort_state]}")
 
     def action_open_terminal(self) -> None:
         table = self.query_one(DataTable)
