@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import subprocess
+import configparser
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 
@@ -18,6 +19,78 @@ from textual.worker import get_current_worker
 # ---------------------------------------------------------
 # CORE LOGIC
 # ---------------------------------------------------------
+def load_config(base_path: Path) -> Dict[str, Any]:
+    """Loads configuration fallbacks from ~/.gitscannerrc, pyproject.toml, and local .gitscannerrc."""
+    config: Dict[str, Any] = {"exclude": [], "max_depth": None}
+
+    def parse_rc(path: Path):
+        try:
+            content = path.read_text(encoding="utf-8").strip()
+            if not content: return
+            if content.startswith("{"):
+                try:
+                    data = json.loads(content)
+                    if "exclude" in data:
+                        if isinstance(data["exclude"], list):
+                            config["exclude"].extend(data["exclude"])
+                        elif isinstance(data["exclude"], str):
+                            config["exclude"].extend([v.strip() for v in data["exclude"].split(",") if v.strip()])
+                    if "max_depth" in data:
+                        config["max_depth"] = int(data["max_depth"])
+                except Exception: pass
+            else:
+                parser = configparser.ConfigParser()
+                if not any(line.strip().startswith("[") for line in content.splitlines()):
+                    content = "[gitscanner]\n" + content
+                try:
+                    parser.read_string(content)
+                    section = "gitscanner"
+                    if parser.has_section("tool.gitscanner"): section = "tool.gitscanner"
+                    if parser.has_section(section):
+                        if parser.has_option(section, "exclude"):
+                            val = parser.get(section, "exclude")
+                            config["exclude"].extend([v.strip() for v in val.split(",") if v.strip()])
+                        if parser.has_option(section, "max_depth"):
+                            config["max_depth"] = parser.getint(section, "max_depth")
+                except Exception: pass
+        except Exception: pass
+
+    def parse_pyproject(path: Path):
+        try:
+            content = path.read_text(encoding="utf-8")
+            in_section = False
+            for line in content.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"): continue
+                if line.startswith("[") and line.endswith("]"):
+                    in_section = (line == "[tool.gitscanner]")
+                    continue
+                if in_section and "=" in line:
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip().strip("'").strip('"')
+                    if key == "exclude":
+                        cleaned_val = val.strip("[]")
+                        config["exclude"].extend([v.strip().strip("'").strip('"') for v in cleaned_val.split(",") if v.strip()])
+                    elif key == "max_depth":
+                        try: config["max_depth"] = int(val)
+                        except ValueError: pass
+        except Exception: pass
+
+    home_rc = Path.home() / ".gitscannerrc"
+    if home_rc.exists(): parse_rc(home_rc)
+
+    pyproject = base_path / "pyproject.toml"
+    if pyproject.exists(): parse_pyproject(pyproject)
+
+    local_rc = base_path / ".gitscannerrc"
+    if local_rc.exists(): parse_rc(local_rc)
+
+    if config["exclude"]:
+        config["exclude"] = list(dict.fromkeys(config["exclude"]))
+
+    return config
+
 def truncate_path(path_obj: Path, max_length: int = 85, min_length: int = 20) -> str:
     """Helper to truncate very long repository paths with ellipses while enforcing a minimum visibility limit."""
     path_str = str(path_obj)
@@ -371,12 +444,19 @@ def scan(
         rprint(f"[bold red]❌ Error:[/bold red] Directory '{base_path}' does not exist.")
         raise typer.Exit(code=1)
 
-    exclude_list = [item.strip() for item in exclude.split(',')] if exclude else None
+    config = load_config(base_path)
+
+    exclude_list = config.get("exclude", [])
+    if exclude:
+        exclude_list.extend([item.strip() for item in exclude.split(',')])
+    exclude_list = list(dict.fromkeys(exclude_list)) if exclude_list else None
+
+    final_max_depth = max_depth if max_depth is not None else config.get("max_depth")
 
     # Route 1: TUI Mode
     if interactive:
         try:
-            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=max_depth)
+            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=final_max_depth)
             tui_app.run()
             rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
         except Exception as e:
@@ -387,7 +467,7 @@ def scan(
     # Route 2: CLI Mode
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
         dirty_repos = []
-        for repo_path in find_git_repos(base_path, exclude=exclude_list, max_depth=max_depth):
+        for repo_path in find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth):
             details = get_repo_details(repo_path)
             if details:
                 dirty_repos.append(details)
