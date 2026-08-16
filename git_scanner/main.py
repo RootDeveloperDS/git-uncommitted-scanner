@@ -171,11 +171,27 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
         untracked = sum(1 for line in lines if line.startswith('??'))
         modified = len(lines) - untracked
 
+        last_commit_age = "No commits"
+        last_commit_ts = 0
+        try:
+            log_result = subprocess.run(
+                ['git', 'log', '-1', '--format=%cr|%ct'],
+                cwd=repo_path, capture_output=True, text=True, check=True
+            )
+            age_output = log_result.stdout.strip()
+            if age_output and '|' in age_output:
+                last_commit_age, ts_str = age_output.split('|', 1)
+                last_commit_ts = int(ts_str)
+        except Exception:
+            pass
+
         return {
             'path': repo_path,
             'branch': branch,
             'modified': modified,
-            'untracked': untracked
+            'untracked': untracked,
+            'last_commit_age': last_commit_age,
+            'last_commit_ts': last_commit_ts
         }
     except Exception:
         return None
@@ -286,7 +302,7 @@ class GitScannerTUI(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
-        table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
+        table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked", "Last Commit")
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -339,6 +355,8 @@ class GitScannerTUI(App):
                 sorted_repos.sort(key=lambda r: r['modified'], reverse=self.sort_reverse)
             elif self.sort_column == 4:  # Untracked
                 sorted_repos.sort(key=lambda r: r['untracked'], reverse=self.sort_reverse)
+            elif self.sort_column == 5:  # Last Commit
+                sorted_repos.sort(key=lambda r: r.get('last_commit_ts', 0), reverse=self.sort_reverse)
 
         # Calculate dynamic max path length based on current screen width with a min floor of 20 chars
         screen_width = self.size.width if self.size and self.size.width > 0 else 100
@@ -351,6 +369,7 @@ class GitScannerTUI(App):
                 str(repo['branch']),
                 str(repo['modified']),
                 str(repo['untracked']),
+                str(repo.get('last_commit_age', 'No commits')),
                 key=str(repo['path'])
             )
 
@@ -423,7 +442,7 @@ class GitScannerTUI(App):
     def handle_header_selected(self, event: DataTable.HeaderSelected) -> None:
         """Handle clicking column header to toggle sorting."""
         column_index = event.column_index
-        col_names = ["ID", "Target", "Branch", "Modified", "Untracked"]
+        col_names = ["ID", "Target", "Branch", "Modified", "Untracked", "Last Commit"]
         col_name = col_names[column_index] if column_index < len(col_names) else f"Column {column_index}"
 
         if self.sort_column == column_index:
@@ -526,7 +545,8 @@ def scan(
                 "path": str(repo['path']),
                 "branch": repo['branch'],
                 "modified": repo['modified'],
-                "untracked": repo['untracked']
+                "untracked": repo['untracked'],
+                "last_commit_age": repo.get('last_commit_age', 'No commits')
             }
             for repo in dirty_repos
         ]
@@ -540,6 +560,7 @@ def scan(
     table.add_column("Branch", style="green")
     table.add_column("Modified", style="yellow", justify="right")
     table.add_column("Untracked", style="red", justify="right")
+    table.add_column("Last Commit", style="blue")
 
     for idx, repo in enumerate(dirty_repos, 1):
         table.add_row(
@@ -547,7 +568,8 @@ def scan(
             str(repo['path']),
             str(repo['branch']),
             str(repo['modified']),
-            str(repo['untracked'])
+            str(repo['untracked']),
+            str(repo.get('last_commit_age', 'No commits'))
         )
 
     console.print(table)
