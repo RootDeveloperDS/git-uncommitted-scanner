@@ -255,7 +255,8 @@ class GitScannerTUI(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("o", "open_terminal", "Open Workspace (o/Enter/DblClick)"),
-        Binding("slash", "toggle_search", "Search/Filter"),
+        Binding("s", "toggle_search", "Search/Filter"),
+        Binding("escape", "close_search", "Close Search", show=False),
         Binding("r", "refresh_scan", "Refresh Scan")
     ]
 
@@ -399,13 +400,18 @@ class GitScannerTUI(App):
     def action_toggle_search(self) -> None:
         search_input = self.query_one("#search-input", Input)
         if search_input.display:
+            self.action_close_search()
+        else:
+            search_input.display = True
+            search_input.focus()
+
+    def action_close_search(self) -> None:
+        search_input = self.query_one("#search-input", Input)
+        if search_input.display:
             search_input.display = False
             search_input.value = ""
             self.query_one(DataTable).focus()
             self._render_table_rows(self.current_repos)
-        else:
-            search_input.display = True
-            search_input.focus()
 
     @on(Input.Changed, "#search-input")
     def handle_search_changed(self, event: Input.Changed) -> None:
