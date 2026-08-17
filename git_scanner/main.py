@@ -237,7 +237,6 @@ class GitScannerTUI(App):
         border: round #00ffff;
         background: #051515;
         color: #e0ffff;
-        display: none;
     }
 
     #status-bar {
@@ -256,6 +255,7 @@ class GitScannerTUI(App):
         Binding("q", "quit", "Quit"),
         Binding("o", "open_terminal", "Open Workspace (o/Enter/DblClick)"),
         Binding("slash", "toggle_search", "Search/Filter"),
+        Binding("escape", "cancel_search", "Cancel Search", show=False),
         Binding("r", "refresh_scan", "Refresh Scan")
     ]
 
@@ -282,11 +282,13 @@ class GitScannerTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one("#search-input", Input).display = False
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
         table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
+        table.focus()
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -396,16 +398,31 @@ class GitScannerTUI(App):
         else:
             self._render_table_rows(repos)
 
+    def action_cancel_search(self) -> None:
+        """Hides the search input and restores focus to the table."""
+        search_input = self.query_one("#search-input", Input)
+        search_input.display = False
+        search_input.value = ""
+        self.query_one(DataTable).focus()
+        self._render_table_rows(self.current_repos)
+
     def action_toggle_search(self) -> None:
+        """Toggles the visibility of the search input."""
         search_input = self.query_one("#search-input", Input)
         if search_input.display:
-            search_input.display = False
-            search_input.value = ""
-            self.query_one(DataTable).focus()
-            self._render_table_rows(self.current_repos)
+            self.action_cancel_search()
         else:
             search_input.display = True
             search_input.focus()
+
+    def on_key(self, event) -> None:
+        """Handle escape key correctly for focused inputs."""
+        if event.key == "escape":
+            search_input = self.query_one("#search-input", Input)
+            if search_input.has_focus:
+                self.action_cancel_search()
+                event.prevent_default()
+                event.stop()
 
     @on(Input.Changed, "#search-input")
     def handle_search_changed(self, event: Input.Changed) -> None:
