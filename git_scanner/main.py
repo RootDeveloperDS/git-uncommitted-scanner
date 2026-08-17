@@ -3,6 +3,7 @@ import os
 import json
 import subprocess
 import configparser
+import shutil
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, List, Any
@@ -190,24 +191,52 @@ def open_external_terminal(path: str) -> None:
     """Cross-platform function to open terminal and execute 'git status'."""
     path_obj = Path(path).resolve()
     
-    # ➔ FIX: Using 'cwd=path_obj' forces the terminal to spawn inside the repo natively.
     if sys.platform == "win32":
-        subprocess.Popen('start cmd /K "git status"', cwd=path_obj, shell=True)
+        if shutil.which("wt"):
+            subprocess.Popen(f'wt -d "{path_obj}" cmd /k "git status"', shell=True)
+        elif shutil.which("pwsh") or shutil.which("powershell"):
+            ps = "pwsh" if shutil.which("pwsh") else "powershell"
+            subprocess.Popen(f'start {ps} -NoExit -Command "cd \'{path_obj}\'; git status"', shell=True)
+        else:
+            subprocess.Popen('start cmd /K "git status"', cwd=path_obj, shell=True)
     elif sys.platform == "darwin":
-        # macOS: Use AppleScript to strictly open a new Terminal window with commands
         script = f'''
-        osascript -e 'tell application "Terminal" to do script "cd \\"{path_obj}\\" && git status"' -e 'tell application "Terminal" to activate'
+        tell application "System Events"
+            set isRunning to (exists process "iTerm2")
+        end tell
+        if isRunning then
+            tell application "iTerm2"
+                create window with default profile
+                tell current session of current window
+                    write text "cd \\"{path_obj}\\" && git status"
+                end tell
+                activate
+            end tell
+        else
+            tell application "Terminal"
+                do script "cd \\"{path_obj}\\" && git status"
+                activate
+            end tell
+        end if
         '''
-        subprocess.Popen(script, shell=True)
+        subprocess.Popen(['osascript', '-e', script])
     else:
-        terminals = ['gnome-terminal', 'konsole', 'xfce4-terminal', 'alacritty', 'xterm']
+        terminals = [
+            'alacritty', 'kitty', 'gnome-terminal', 'konsole',
+            'xfce4-terminal', 'terminator', 'tilix', 'xterm'
+        ]
         for term in terminals:
-            if subprocess.run(['which', term], capture_output=True).returncode == 0:
-                if term == 'gnome-terminal':
-                    subprocess.Popen([term, '--', 'bash', '-c', 'git status && exec bash'], cwd=path_obj)
-                else:
-                    subprocess.Popen([term, '-e', 'bash -c "git status && exec bash"'], cwd=path_obj)
-                break
+            if shutil.which(term):
+                try:
+                    if term == 'gnome-terminal':
+                        subprocess.Popen([term, '--', 'bash', '-c', 'git status && exec bash'], cwd=path_obj)
+                    elif term in ['alacritty', 'kitty']:
+                        subprocess.Popen([term, '-e', 'bash', '-c', 'git status && exec bash'], cwd=path_obj)
+                    else:
+                        subprocess.Popen([term, '-e', 'bash -c "git status && exec bash"'], cwd=path_obj)
+                    break
+                except Exception:
+                    continue
 
 # ---------------------------------------------------------
 # TUI IMPLEMENTATION
