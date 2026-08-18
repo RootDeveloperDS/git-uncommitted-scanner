@@ -286,7 +286,7 @@ class GitScannerTUI(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
-        table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
+        self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -326,25 +326,11 @@ class GitScannerTUI(App):
         table = self.query_one(DataTable)
         table.clear()
 
-        # Apply active sorting if column selected
-        sorted_repos = list(repos_to_render)
-        if self.sort_column is not None:
-            if self.sort_column == 0:  # ID
-                pass
-            elif self.sort_column == 1:  # Path
-                sorted_repos.sort(key=lambda r: str(r['path']).lower(), reverse=self.sort_reverse)
-            elif self.sort_column == 2:  # Branch
-                sorted_repos.sort(key=lambda r: str(r['branch']).lower(), reverse=self.sort_reverse)
-            elif self.sort_column == 3:  # Modified
-                sorted_repos.sort(key=lambda r: r['modified'], reverse=self.sort_reverse)
-            elif self.sort_column == 4:  # Untracked
-                sorted_repos.sort(key=lambda r: r['untracked'], reverse=self.sort_reverse)
-
         # Calculate dynamic max path length based on current screen width with a min floor of 20 chars
         screen_width = self.size.width if self.size and self.size.width > 0 else 100
         dynamic_max_len = max(20, screen_width - 45)
 
-        for idx, repo in enumerate(sorted_repos, 1):
+        for idx, repo in enumerate(repos_to_render, 1):
             table.add_row(
                 str(idx),
                 truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
@@ -353,6 +339,14 @@ class GitScannerTUI(App):
                 str(repo['untracked']),
                 key=str(repo['path'])
             )
+
+        # Apply active sorting if column selected natively on DataTable to preserve sort indicator
+        if hasattr(self, 'col_keys') and self.sort_column is not None:
+            col_key = self.col_keys[self.sort_column]
+            if self.sort_column in (0, 3, 4):
+                table.sort(col_key, key=lambda x: int(x), reverse=self.sort_reverse)
+            else:
+                table.sort(col_key, key=lambda x: str(x).lower(), reverse=self.sort_reverse)
 
     def on_resize(self, event) -> None:
         """Dynamically re-render table rows when window size changes."""
