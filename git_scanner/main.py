@@ -3,6 +3,7 @@ import os
 import json
 import subprocess
 import configparser
+import shutil
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, List, Any
@@ -146,7 +147,7 @@ def find_git_repos(
 
 
 def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
-    """Checks if a git repo has uncommitted changes and returns status details in a single git subprocess call."""
+    """Checks if a git repo has uncommitted changes and returns status details including branch and last commit age."""
     try:
         status_result = subprocess.run(
             ['git', 'status', '--porcelain', '-b'],
@@ -171,11 +172,24 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
         untracked = sum(1 for line in lines if line.startswith('??'))
         modified = len(lines) - untracked
 
+        last_commit = "Unknown"
+        try:
+            log_result = subprocess.run(
+                ['git', 'log', '-1', '--format=%cr'],
+                cwd=repo_path, capture_output=True, text=True, check=True
+            )
+            age = log_result.stdout.strip()
+            if age:
+                last_commit = age
+        except subprocess.CalledProcessError:
+            last_commit = "No commits"
+
         return {
             'path': repo_path,
             'branch': branch,
             'modified': modified,
-            'untracked': untracked
+            'untracked': untracked,
+            'last_commit': last_commit
         }
     except Exception:
         return None
@@ -190,24 +204,52 @@ def open_external_terminal(path: str) -> None:
     """Cross-platform function to open terminal and execute 'git status'."""
     path_obj = Path(path).resolve()
     
-    # ➔ FIX: Using 'cwd=path_obj' forces the terminal to spawn inside the repo natively.
     if sys.platform == "win32":
-        subprocess.Popen('start cmd /K "git status"', cwd=path_obj, shell=True)
+        if shutil.which("wt"):
+            subprocess.Popen(f'wt -d "{path_obj}" cmd /k "git status"', shell=True)
+        elif shutil.which("pwsh") or shutil.which("powershell"):
+            ps = "pwsh" if shutil.which("pwsh") else "powershell"
+            subprocess.Popen(f'start {ps} -NoExit -Command "cd \'{path_obj}\'; git status"', shell=True)
+        else:
+            subprocess.Popen('start cmd /K "git status"', cwd=path_obj, shell=True)
     elif sys.platform == "darwin":
-        # macOS: Use AppleScript to strictly open a new Terminal window with commands
         script = f'''
-        osascript -e 'tell application "Terminal" to do script "cd \\"{path_obj}\\" && git status"' -e 'tell application "Terminal" to activate'
+        tell application "System Events"
+            set isRunning to (exists process "iTerm2")
+        end tell
+        if isRunning then
+            tell application "iTerm2"
+                create window with default profile
+                tell current session of current window
+                    write text "cd \\"{path_obj}\\" && git status"
+                end tell
+                activate
+            end tell
+        else
+            tell application "Terminal"
+                do script "cd \\"{path_obj}\\" && git status"
+                activate
+            end tell
+        end if
         '''
-        subprocess.Popen(script, shell=True)
+        subprocess.Popen(['osascript', '-e', script])
     else:
-        terminals = ['gnome-terminal', 'konsole', 'xfce4-terminal', 'alacritty', 'xterm']
+        terminals = [
+            'alacritty', 'kitty', 'gnome-terminal', 'konsole',
+            'xfce4-terminal', 'terminator', 'tilix', 'xterm'
+        ]
         for term in terminals:
-            if subprocess.run(['which', term], capture_output=True).returncode == 0:
-                if term == 'gnome-terminal':
-                    subprocess.Popen([term, '--', 'bash', '-c', 'git status && exec bash'], cwd=path_obj)
-                else:
-                    subprocess.Popen([term, '-e', 'bash -c "git status && exec bash"'], cwd=path_obj)
-                break
+            if shutil.which(term):
+                try:
+                    if term == 'gnome-terminal':
+                        subprocess.Popen([term, '--', 'bash', '-c', 'git status && exec bash'], cwd=path_obj)
+                    elif term in ['alacritty', 'kitty']:
+                        subprocess.Popen([term, '-e', 'bash', '-c', 'git status && exec bash'], cwd=path_obj)
+                    else:
+                        subprocess.Popen([term, '-e', 'bash -c "git status && exec bash"'], cwd=path_obj)
+                    break
+                except Exception:
+                    continue
 
 # ---------------------------------------------------------
 # TUI IMPLEMENTATION
@@ -255,7 +297,8 @@ class GitScannerTUI(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("o", "open_terminal", "Open Workspace (o/Enter/DblClick)"),
-        Binding("s", "toggle_search", "Search/Filter"),
+        Binding("slash", "toggle_search", "Search/Filter"),
+        Binding("s", "toggle_search", "Search/Filter", show=False),
         Binding("escape", "close_search", "Close Search", show=False),
         Binding("r", "refresh_scan", "Refresh Scan")
     ]
@@ -276,7 +319,7 @@ class GitScannerTUI(App):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Input(placeholder="🔍 Type to filter repositories by path or branch...", id="search-input")
+        yield Input(placeholder="🔍 Type to filter repositories by path or branch... (Press Esc to close)", id="search-input")
         yield LoadingIndicator(id="loader")
         yield DataTable(id="repo_table")
         yield Label("INITIALIZING SYSTEM...", id="status-bar")
@@ -287,7 +330,7 @@ class GitScannerTUI(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
-        table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked")
+        self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked", "Last Commit")
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -327,33 +370,28 @@ class GitScannerTUI(App):
         table = self.query_one(DataTable)
         table.clear()
 
-        # Apply active sorting if column selected
-        sorted_repos = list(repos_to_render)
-        if self.sort_column is not None:
-            if self.sort_column == 0:  # ID
-                pass
-            elif self.sort_column == 1:  # Path
-                sorted_repos.sort(key=lambda r: str(r['path']).lower(), reverse=self.sort_reverse)
-            elif self.sort_column == 2:  # Branch
-                sorted_repos.sort(key=lambda r: str(r['branch']).lower(), reverse=self.sort_reverse)
-            elif self.sort_column == 3:  # Modified
-                sorted_repos.sort(key=lambda r: r['modified'], reverse=self.sort_reverse)
-            elif self.sort_column == 4:  # Untracked
-                sorted_repos.sort(key=lambda r: r['untracked'], reverse=self.sort_reverse)
-
         # Calculate dynamic max path length based on current screen width with a min floor of 20 chars
         screen_width = self.size.width if self.size and self.size.width > 0 else 100
-        dynamic_max_len = max(20, screen_width - 45)
+        dynamic_max_len = max(20, screen_width - 55)
 
-        for idx, repo in enumerate(sorted_repos, 1):
+        for idx, repo in enumerate(repos_to_render, 1):
             table.add_row(
                 str(idx),
                 truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
                 str(repo['branch']),
                 str(repo['modified']),
                 str(repo['untracked']),
+                str(repo.get('last_commit', 'Unknown')),
                 key=str(repo['path'])
             )
+
+        # Apply active sorting on DataTable to preserve sort indicator
+        if hasattr(self, 'col_keys') and self.sort_column is not None and self.col_keys:
+            col_key = self.col_keys[self.sort_column]
+            if self.sort_column in (0, 3, 4):
+                table.sort(col_key, key=lambda x: int(x) if str(x).isdigit() else 0, reverse=self.sort_reverse)
+            else:
+                table.sort(col_key, key=lambda x: str(x).lower(), reverse=self.sort_reverse)
 
     def on_resize(self, event) -> None:
         """Dynamically re-render table rows when window size changes."""
@@ -413,6 +451,15 @@ class GitScannerTUI(App):
             self.query_one(DataTable).focus()
             self._render_table_rows(self.current_repos)
 
+    def on_key(self, event) -> None:
+        """Handle escape key to cancel search and restore focus."""
+        if event.key == "escape":
+            search_input = self.query_one("#search-input", Input)
+            if search_input.display:
+                self.action_close_search()
+                event.prevent_default()
+                event.stop()
+
     @on(Input.Changed, "#search-input")
     def handle_search_changed(self, event: Input.Changed) -> None:
         search_term = event.value.lower()
@@ -429,7 +476,7 @@ class GitScannerTUI(App):
     def handle_header_selected(self, event: DataTable.HeaderSelected) -> None:
         """Handle clicking column header to toggle sorting."""
         column_index = event.column_index
-        col_names = ["ID", "Target", "Branch", "Modified", "Untracked"]
+        col_names = ["ID", "Target", "Branch", "Modified", "Untracked", "Last Commit"]
         col_name = col_names[column_index] if column_index < len(col_names) else f"Column {column_index}"
 
         if self.sort_column == column_index:
@@ -532,7 +579,8 @@ def scan(
                 "path": str(repo['path']),
                 "branch": repo['branch'],
                 "modified": repo['modified'],
-                "untracked": repo['untracked']
+                "untracked": repo['untracked'],
+                "last_commit": repo.get('last_commit', 'Unknown')
             }
             for repo in dirty_repos
         ]
@@ -546,6 +594,7 @@ def scan(
     table.add_column("Branch", style="green")
     table.add_column("Modified", style="yellow", justify="right")
     table.add_column("Untracked", style="red", justify="right")
+    table.add_column("Last Commit", style="blue")
 
     for idx, repo in enumerate(dirty_repos, 1):
         table.add_row(
@@ -553,7 +602,8 @@ def scan(
             str(repo['path']),
             str(repo['branch']),
             str(repo['modified']),
-            str(repo['untracked'])
+            str(repo['untracked']),
+            str(repo.get('last_commit', 'Unknown'))
         )
 
     console.print(table)

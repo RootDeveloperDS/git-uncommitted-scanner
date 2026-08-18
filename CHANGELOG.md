@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.6] - 2026-08-18
+
+### 🚀 Features (Evo 🚀)
+- **Last Commit Age Metric**: Added relative last commit timestamp (`git log -1 --format=%cr`) to CLI output, interactive TUI table, and JSON export to help developers instantly prioritize stale vs recently touched dirty repos.
+- **Enhanced Terminal Launcher**: Extended `open_external_terminal()` with `shutil.which` detection supporting Windows Terminal (`wt`), PowerShell 7 (`pwsh`), macOS `iTerm2`, and modern Linux terminals (`alacritty`, `kitty`, `konsole`, `xfce4-terminal`, etc.).
+
+### 🎨 User Experience (Palette 🎨)
+- **Search Escape & Keybinding Ergonomics**: Added <kbd>Escape</kbd> key handler to instantly cancel/dismiss search and return table focus. Supported both <kbd>/</kbd> and <kbd>s</kbd> search shortcuts.
+- **Native DataTable Sorting**: Stored column keys to utilize Textual's native `DataTable.sort()` ensuring consistent sort direction chevrons (▲/▼).
+
+---
+
 ## [0.1.5] - 2026-08-15
 
 ### ⚡ Performance (Bolt ⚡)
