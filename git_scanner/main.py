@@ -173,14 +173,18 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
         modified = len(lines) - untracked
 
         last_commit = "Unknown"
+        last_commit_timestamp = 0
         try:
             log_result = subprocess.run(
-                ['git', 'log', '-1', '--format=%cr'],
+                ['git', 'log', '-1', '--format=%cr%x00%ct'],
                 cwd=repo_path, capture_output=True, text=True, check=True
             )
-            age = log_result.stdout.strip()
-            if age:
-                last_commit = age
+            raw_log = log_result.stdout.strip()
+            if raw_log:
+                parts = raw_log.split('\x00')
+                last_commit = parts[0]
+                if len(parts) > 1 and parts[1].isdigit():
+                    last_commit_timestamp = int(parts[1])
         except subprocess.CalledProcessError:
             last_commit = "No commits"
 
@@ -189,7 +193,8 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
             'branch': branch,
             'modified': modified,
             'untracked': untracked,
-            'last_commit': last_commit
+            'last_commit': last_commit,
+            'last_commit_timestamp': last_commit_timestamp
         }
     except Exception:
         return None
@@ -370,11 +375,27 @@ class GitScannerTUI(App):
         table = self.query_one(DataTable)
         table.clear()
 
+        # Sort the data model accurately before rendering rows
+        sorted_repos = list(repos_to_render)
+        if self.sort_column is not None:
+            if self.sort_column == 0:  # ID
+                pass
+            elif self.sort_column == 1:  # Path
+                sorted_repos.sort(key=lambda r: str(r['path']).lower(), reverse=self.sort_reverse)
+            elif self.sort_column == 2:  # Branch
+                sorted_repos.sort(key=lambda r: str(r['branch']).lower(), reverse=self.sort_reverse)
+            elif self.sort_column == 3:  # Modified
+                sorted_repos.sort(key=lambda r: r.get('modified', 0), reverse=self.sort_reverse)
+            elif self.sort_column == 4:  # Untracked
+                sorted_repos.sort(key=lambda r: r.get('untracked', 0), reverse=self.sort_reverse)
+            elif self.sort_column == 5:  # Last Commit (Chronological by epoch timestamp)
+                sorted_repos.sort(key=lambda r: r.get('last_commit_timestamp', 0), reverse=self.sort_reverse)
+
         # Calculate dynamic max path length based on current screen width with a min floor of 20 chars
         screen_width = self.size.width if self.size and self.size.width > 0 else 100
         dynamic_max_len = max(20, screen_width - 55)
 
-        for idx, repo in enumerate(repos_to_render, 1):
+        for idx, repo in enumerate(sorted_repos, 1):
             table.add_row(
                 str(idx),
                 truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
@@ -384,14 +405,6 @@ class GitScannerTUI(App):
                 str(repo.get('last_commit', 'Unknown')),
                 key=str(repo['path'])
             )
-
-        # Apply active sorting on DataTable to preserve sort indicator
-        if hasattr(self, 'col_keys') and self.sort_column is not None and self.col_keys:
-            col_key = self.col_keys[self.sort_column]
-            if self.sort_column in (0, 3, 4):
-                table.sort(col_key, key=lambda x: int(x) if str(x).isdigit() else 0, reverse=self.sort_reverse)
-            else:
-                table.sort(col_key, key=lambda x: str(x).lower(), reverse=self.sort_reverse)
 
     def on_resize(self, event) -> None:
         """Dynamically re-render table rows when window size changes."""
@@ -483,10 +496,11 @@ class GitScannerTUI(App):
             self.sort_reverse = not self.sort_reverse
         else:
             self.sort_column = column_index
-            self.sort_reverse = False
+            # Default to descending (newest/highest first) for timestamps and counts, ascending for text
+            self.sort_reverse = True if column_index in (3, 4, 5) else False
 
-        direction = "Descending (▼)" if self.sort_reverse else "Ascending (▲)"
-        self.notify(f"Sorted by {col_name} in {direction} order")
+        direction = "Descending (▼ - Newest/Highest)" if (self.sort_reverse and column_index in (3, 4, 5)) else ("Descending (▼)" if self.sort_reverse else ("Ascending (▲ - Oldest/Lowest)" if column_index in (3, 4, 5) else "Ascending (▲)"))
+        self.notify(f"Sorted by {col_name}: {direction}")
 
         search_input = self.query_one("#search-input", Input)
         search_term = search_input.value.lower() if search_input.display else ""
@@ -580,7 +594,8 @@ def scan(
                 "branch": repo['branch'],
                 "modified": repo['modified'],
                 "untracked": repo['untracked'],
-                "last_commit": repo.get('last_commit', 'Unknown')
+                "last_commit": repo.get('last_commit', 'Unknown'),
+                "last_commit_timestamp": repo.get('last_commit_timestamp', 0)
             }
             for repo in dirty_repos
         ]

@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🎨 User Experience (Palette 🎨)
 - **Search Escape & Keybinding Ergonomics**: Added <kbd>Escape</kbd> key handler to instantly cancel/dismiss search and return table focus. Supported both <kbd>/</kbd> and <kbd>s</kbd> search shortcuts.
-- **Native DataTable Sorting**: Stored column keys to utilize Textual's native `DataTable.sort()` ensuring consistent sort direction chevrons (▲/▼).
+- **Chronological Timestamp Sorting**: Refactored Last Commit sorting in the TUI to sort by exact Unix epoch timestamps instead of string comparison, ensuring proper chronological order (e.g. distinguishing minutes from weeks accurately).
 
 ---
 
