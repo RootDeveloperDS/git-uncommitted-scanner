@@ -47,8 +47,9 @@ scanrepos /path/to/projects -d 3
 # Exclude specific folders (e.g. node_modules, build, vendor)
 scanrepos /path/to/projects -e "vendor,build"
 
-# Export results to JSON
+# Export results to JSON or CSV
 scanrepos /path/to/projects --export scan_results.json
+scanrepos /path/to/projects --export scan_results.csv
 ```
 
 ### 2. Interactive TUI Mode (`-i`)
