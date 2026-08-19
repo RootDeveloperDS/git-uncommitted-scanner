@@ -11,3 +11,8 @@
 - Changed the toggle search binding from `slash` to `s` for a more ergonomic UX.
 - Implemented `escape` to close the search overlay explicitly instead of requiring toggle with `s` (avoiding issues typing `s` inside the search bar).
 - Discovered and accounted for Textual behavior where an `Input` consumes app-level key bindings if focused, enabling users to type "s" within the search input safely.
+
+### Auto-Focusing DataTable
+- **Issue:** Textual DataTables do not automatically gain focus when toggled from hidden to visible (e.g., after a scan loader finishes). This requires users to manually press `Tab` or click to start navigating.
+- **Solution:** Explicitly call `table.focus()` when revealing the table (unless an input field like search is currently active).
+- **Impact:** Allows immediate use of arrow keys for row navigation as soon as a scan completes, improving terminal keyboard ergonomics.

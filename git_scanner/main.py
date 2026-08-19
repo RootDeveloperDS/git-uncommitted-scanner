@@ -412,9 +412,16 @@ class GitScannerTUI(App):
         table = self.query_one(DataTable)
         loader = self.query_one("#loader", LoadingIndicator)
         status = self.query_one("#status-bar", Label)
+        search_input = self.query_one("#search-input", Input)
         
         loader.display = False
         table.display = True
+
+        # UX Improvement: Automatically focus the table after scan completes
+        # so arrow keys work immediately without requiring Tab/Click,
+        # unless the search input is currently active.
+        if not search_input.display:
+            table.focus()
         
         if not repos:
             table.clear()
