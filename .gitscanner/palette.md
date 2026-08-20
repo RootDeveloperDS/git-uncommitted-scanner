@@ -11,3 +11,4 @@
 - Changed the toggle search binding from `slash` to `s` for a more ergonomic UX.
 - Implemented `escape` to close the search overlay explicitly instead of requiring toggle with `s` (avoiding issues typing `s` inside the search bar).
 - Discovered and accounted for Textual behavior where an `Input` consumes app-level key bindings if focused, enabling users to type "s" within the search input safely.
+- Added explicit DataTable focus in Textual to enable immediate arrow-key navigation after dynamic visibility changes. Added rounded boxes and captions to CLI tables.

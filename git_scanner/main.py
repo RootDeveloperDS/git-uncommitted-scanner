@@ -11,7 +11,7 @@ from typing import Optional, Dict, List, Any
 import typer
 from rich.console import Console
 from rich.table import Table
-from rich import print as rprint
+from rich import print as rprint, box
 from textual import on
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Label, LoadingIndicator, Input
@@ -429,15 +429,18 @@ class GitScannerTUI(App):
         loader.display = False
         table.display = True
         
+        search_input = self.query_one("#search-input", Input)
+
         if not repos:
             table.clear()
             status.update("✅ ALL REPOSITORIES SECURED AND COMMITTED")
+            if not search_input.has_focus:
+                table.focus()
             return
             
         status.update(f"⚠️ DETECTED {len(repos)} REPOSITORIES REQUIRING ATTENTION")
 
         # Re-apply active search filter if input is visible
-        search_input = self.query_one("#search-input", Input)
         search_term = search_input.value.lower() if search_input.display else ""
         if search_term:
             filtered = [
@@ -447,6 +450,9 @@ class GitScannerTUI(App):
             self._render_table_rows(filtered)
         else:
             self._render_table_rows(repos)
+
+        if not search_input.has_focus:
+            table.focus()
 
     def action_toggle_search(self) -> None:
         search_input = self.query_one("#search-input", Input)
@@ -603,7 +609,7 @@ def scan(
         export_file.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
         rprint(f"[bold green]📄 Exported scan results ({len(dirty_repos)} repos) to {export_file.resolve()}[/bold green]")
 
-    table = Table(title="Uncommitted Repositories", show_header=True, header_style="bold magenta")
+    table = Table(title=f"Uncommitted Repositories in [bold]{base_path.resolve()}[/bold]", show_header=True, header_style="bold magenta", box=box.ROUNDED, caption=f"[dim]Total Uncommitted: {len(dirty_repos)}[/dim]", caption_justify="right")
     table.add_column("No.", style="dim", width=4)
     table.add_column("Repository Path", style="cyan")
     table.add_column("Branch", style="green")
