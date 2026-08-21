@@ -11,3 +11,4 @@
 - Changed the toggle search binding from `slash` to `s` for a more ergonomic UX.
 - Implemented `escape` to close the search overlay explicitly instead of requiring toggle with `s` (avoiding issues typing `s` inside the search bar).
 - Discovered and accounted for Textual behavior where an `Input` consumes app-level key bindings if focused, enabling users to type "s" within the search input safely.
+- **Status Bar Contextual Colors**: Improved TUI visual feedback by adding dynamic CSS classes (`.success`, `.warning`) to the `#status-bar`. When 0 uncommitted repos are found, the status bar turns green to immediately communicate safety. When uncommitted repos exist, it highlights in red to draw attention. Textual's `add_class()` and `remove_class()` safely toggle these states programmatically during background thread resolution.
