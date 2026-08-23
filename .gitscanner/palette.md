@@ -11,3 +11,8 @@
 - Changed the toggle search binding from `slash` to `s` for a more ergonomic UX.
 - Implemented `escape` to close the search overlay explicitly instead of requiring toggle with `s` (avoiding issues typing `s` inside the search bar).
 - Discovered and accounted for Textual behavior where an `Input` consumes app-level key bindings if focused, enabling users to type "s" within the search input safely.
+### UX Upgrade - TUI Dynamic Status Feedback & Default Focus
+
+- **Visual Feedback for States**: Refined the `#status-bar` by defining distinct `.warning` and `.success` CSS classes to clearly differentiate between "repositories found" (warning, orange) and "all clean" (success, green).
+- **Class Management vs Display None**: Utilized `widget.add_class()` and `widget.remove_class()` in `update_table` to toggle the stylistic state dynamically without modifying static inline styles. Also avoided using `display: none` in CSS for widgets that might be dynamically toggled via `widget.display` in Python. For instance, `#search-input` is now hidden natively during `on_mount` instead of CSS `display: none`.
+- **Keyboard Navigation & Defaults**: Enhanced the focus lifecycle. `DataTable` now explicitly receives focus in `on_mount` so keyboard navigation (arrow keys) works immediately after launch without requiring a mouse click. Focus is also restored back to the `DataTable` dynamically via `update_table` when background refreshes clear and reload rows, provided the search input isn't currently active.
