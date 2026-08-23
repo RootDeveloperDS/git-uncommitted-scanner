@@ -284,7 +284,6 @@ class GitScannerTUI(App):
         border: round #00ffff;
         background: #051515;
         color: #e0ffff;
-        display: none;
     }
 
     #status-bar {
@@ -294,6 +293,18 @@ class GitScannerTUI(App):
         background: #001111;
         color: #00ffff;
         border-top: solid #00ffff;
+    }
+
+    #status-bar.warning {
+        background: #442200;
+        color: #ffaa00;
+        border-top: solid #ffaa00;
+    }
+
+    #status-bar.success {
+        background: #002200;
+        color: #00ff00;
+        border-top: solid #00ff00;
     }
     
     LoadingIndicator { color: #00ffff; height: 1fr; }
@@ -331,12 +342,16 @@ class GitScannerTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        # Hide search input programmatically instead of CSS display: none
+        self.query_one("#search-input", Input).display = False
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
         self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked", "Last Commit")
         self.action_refresh_scan()
+        # Set focus to table initially
+        table.focus()
 
     def action_refresh_scan(self) -> None:
         """Triggers the UI loading state and starts the background worker."""
@@ -432,9 +447,15 @@ class GitScannerTUI(App):
         if not repos:
             table.clear()
             status.update("✅ ALL REPOSITORIES SECURED AND COMMITTED")
+            status.remove_class("warning")
+            status.add_class("success")
+            if not self.query_one("#search-input", Input).has_focus:
+                table.focus()
             return
             
         status.update(f"⚠️ DETECTED {len(repos)} REPOSITORIES REQUIRING ATTENTION")
+        status.remove_class("success")
+        status.add_class("warning")
 
         # Re-apply active search filter if input is visible
         search_input = self.query_one("#search-input", Input)
@@ -447,6 +468,9 @@ class GitScannerTUI(App):
             self._render_table_rows(filtered)
         else:
             self._render_table_rows(repos)
+
+        if not search_input.has_focus:
+            table.focus()
 
     def action_toggle_search(self) -> None:
         search_input = self.query_one("#search-input", Input)
