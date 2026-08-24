@@ -11,3 +11,9 @@
 - Changed the toggle search binding from `slash` to `s` for a more ergonomic UX.
 - Implemented `escape` to close the search overlay explicitly instead of requiring toggle with `s` (avoiding issues typing `s` inside the search bar).
 - Discovered and accounted for Textual behavior where an `Input` consumes app-level key bindings if focused, enabling users to type "s" within the search input safely.
+
+### UX Upgrade - Status Bar Dynamic Styling
+
+- Improved contrast and status bar messaging when uncommitted repositories are found (or 0 found).
+- Added `.success` and `.warning` CSS classes to `#status-bar` to visually differentiate states.
+- Learned to use `widget.add_class()` and `widget.remove_class()` to dynamically toggle styles based on background scan outcomes, avoiding hardcoded properties in python.
