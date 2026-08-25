@@ -11,3 +11,7 @@
 - Changed the toggle search binding from `slash` to `s` for a more ergonomic UX.
 - Implemented `escape` to close the search overlay explicitly instead of requiring toggle with `s` (avoiding issues typing `s` inside the search bar).
 - Discovered and accounted for Textual behavior where an `Input` consumes app-level key bindings if focused, enabling users to type "s" within the search input safely.
+
+### UX Upgrade - TUI Dynamic Status Bar Classes
+- Added dynamic CSS classes (`.success`, `.warning`) to the `#status-bar` widget.
+- Toggled these classes during scanning states and when rendering the results table using `add_class()` and `remove_class()`. This provides immediate, color-coded visual feedback without relying on hardcoded inline styles.
