@@ -1,6 +1,7 @@
 import sys
 import os
 import json
+import csv
 import subprocess
 import configparser
 import shutil
@@ -547,7 +548,7 @@ def scan(
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI"),
     exclude: Optional[str] = typer.Option(None, "--exclude", "-e", help="Comma-separated list of directory names to exclude"),
     max_depth: Optional[int] = typer.Option(None, "--max-depth", "-d", help="Maximum directory depth to traverse"),
-    export: Optional[str] = typer.Option(None, "--export", help="Export scan results as JSON to specified file path")
+    export: Optional[str] = typer.Option(None, "--export", help="Export scan results as JSON or CSV to specified file path")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
     base_path = Path(directory).expanduser().resolve()
@@ -600,7 +601,14 @@ def scan(
             for repo in dirty_repos
         ]
         export_file = Path(export)
-        export_file.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
+        if export_file.suffix.lower() == ".csv":
+            with export_file.open("w", newline="", encoding="utf-8") as csvfile:
+                fieldnames = ["path", "branch", "modified", "untracked", "last_commit", "last_commit_timestamp"]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(export_data)
+        else:
+            export_file.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
         rprint(f"[bold green]📄 Exported scan results ({len(dirty_repos)} repos) to {export_file.resolve()}[/bold green]")
 
     table = Table(title="Uncommitted Repositories", show_header=True, header_style="bold magenta")
