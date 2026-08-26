@@ -284,7 +284,6 @@ class GitScannerTUI(App):
         border: round #00ffff;
         background: #051515;
         color: #e0ffff;
-        display: none;
     }
 
     #status-bar {
@@ -296,6 +295,19 @@ class GitScannerTUI(App):
         border-top: solid #00ffff;
     }
     
+
+    #status-bar.success {
+        background: #002200;
+        color: #00ffaa;
+        border-top: solid #00ffaa;
+    }
+
+    #status-bar.warning {
+        background: #221100;
+        color: #ffaa00;
+        border-top: solid #ffaa00;
+    }
+
     LoadingIndicator { color: #00ffff; height: 1fr; }
     """
     
@@ -331,7 +343,9 @@ class GitScannerTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one("#search-input", Input).display = False
         table = self.query_one(DataTable)
+        self.set_focus(table)
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
@@ -342,10 +356,13 @@ class GitScannerTUI(App):
         """Triggers the UI loading state and starts the background worker."""
         table = self.query_one(DataTable)
         loader = self.query_one("#loader", LoadingIndicator)
+        status = self.query_one("#status-bar", Label)
         
         table.display = False
         loader.display = True
-        self.query_one("#status-bar", Label).update(f"⏳ SCANNING DIRECTORY: {self.target_dir}")
+        status.update(f"⏳ SCANNING DIRECTORY: {self.target_dir}")
+        status.remove_class("success")
+        status.remove_class("warning")
         
         self.run_worker(self.scan_directories, thread=True, exclusive=True)
 
@@ -432,9 +449,16 @@ class GitScannerTUI(App):
         if not repos:
             table.clear()
             status.update("✅ ALL REPOSITORIES SECURED AND COMMITTED")
+            status.remove_class("warning")
+            status.add_class("success")
+            search_input = self.query_one("#search-input", Input)
+            if not search_input.display or not search_input.has_focus:
+                self.call_later(table.focus)
             return
             
         status.update(f"⚠️ DETECTED {len(repos)} REPOSITORIES REQUIRING ATTENTION")
+        status.remove_class("success")
+        status.add_class("warning")
 
         # Re-apply active search filter if input is visible
         search_input = self.query_one("#search-input", Input)
@@ -447,6 +471,9 @@ class GitScannerTUI(App):
             self._render_table_rows(filtered)
         else:
             self._render_table_rows(repos)
+
+        if not search_input.has_focus:
+            self.call_later(table.focus)
 
     def action_toggle_search(self) -> None:
         search_input = self.query_one("#search-input", Input)
