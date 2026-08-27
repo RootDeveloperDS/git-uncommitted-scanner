@@ -449,6 +449,9 @@ class GitScannerTUI(App):
         else:
             self._render_table_rows(repos)
 
+        if not search_input.has_focus or not search_input.display:
+            self.call_later(table.focus)
+
     def action_toggle_search(self) -> None:
         search_input = self.query_one("#search-input", Input)
         if search_input.display:
