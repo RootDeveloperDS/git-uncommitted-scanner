@@ -396,16 +396,17 @@ class GitScannerTUI(App):
         screen_width = self.size.width if self.size and self.size.width > 0 else 100
         dynamic_max_len = max(20, screen_width - 55)
 
-        for idx, repo in enumerate(sorted_repos, 1):
-            table.add_row(
-                str(idx),
-                truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
-                str(repo['branch']),
-                str(repo['modified']),
-                str(repo['untracked']),
-                str(repo.get('last_commit', 'Unknown')),
-                key=str(repo['path'])
-            )
+        with self.batch_update():
+            for idx, repo in enumerate(sorted_repos, 1):
+                table.add_row(
+                    str(idx),
+                    truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
+                    str(repo['branch']),
+                    str(repo['modified']),
+                    str(repo['untracked']),
+                    str(repo.get('last_commit', 'Unknown')),
+                    key=str(repo['path'])
+                )
 
     def on_resize(self, event) -> None:
         """Dynamically re-render table rows when window size changes."""
