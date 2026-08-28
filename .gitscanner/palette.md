@@ -15,3 +15,9 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+## Dynamic Contrast Improvement for Status Bar
+- **Date:** $(date +%Y-%m-%d)
+- **Component:** `#status-bar` in Textual TUI (`git_scanner/main.py`)
+- **Improvement:** Added visual feedback using `.success` and `.warning` CSS classes. When all repositories are secured, the status bar turns green to indicate success. When uncommitted changes are detected, it turns red to draw attention.
+- **Learnings:** Dynamic styling of widgets in Textual should be achieved by toggling CSS classes (`add_class`/`remove_class`) rather than hardcoding style properties directly.
