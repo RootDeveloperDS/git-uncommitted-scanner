@@ -5,3 +5,4 @@
 
 ## CSV Export Implementation
 - Upgraded CLI to support exporting scan results directly to CSV in addition to JSON based on file extension. This enables users to easily feed their repo scanning outcomes into developer reporting scripts or spreadsheets.
+- **Filtering & Exclusions**: Added `--exclude-untracked` flag to filter out repositories that only have untracked files, reducing noise during wide-scale scanning.

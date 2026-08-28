@@ -147,7 +147,7 @@ def find_git_repos(
             continue
 
 
-def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
+def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Optional[Dict[str, Any]]:
     """Checks if a git repo has uncommitted changes and returns status details including branch and last commit age."""
     try:
         status_result = subprocess.run(
@@ -188,6 +188,9 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
                     last_commit_timestamp = int(parts[1])
         except subprocess.CalledProcessError:
             last_commit = "No commits"
+
+        if exclude_untracked and modified == 0:
+            return None
 
         return {
             'path': repo_path,
@@ -313,12 +316,14 @@ class GitScannerTUI(App):
         self,
         target_dir: Path,
         exclude: Optional[List[str]] = None,
-        max_depth: Optional[int] = None
+        max_depth: Optional[int] = None,
+        exclude_untracked: bool = False
     ):
         super().__init__()
         self.target_dir = target_dir
         self.exclude = exclude
         self.max_depth = max_depth
+        self.exclude_untracked = exclude_untracked
         self.current_repos: List[Dict[str, Any]] = []
         self.sort_column: Optional[int] = None
         self.sort_reverse: bool = False
@@ -360,7 +365,7 @@ class GitScannerTUI(App):
 
         executor = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4))
         try:
-            futures = [executor.submit(get_repo_details, repo_path) for repo_path in repos]
+            futures = [executor.submit(get_repo_details, repo_path, self.exclude_untracked) for repo_path in repos]
             for future in as_completed(futures):
                 if worker.is_cancelled:
                     return
@@ -551,7 +556,8 @@ def scan(
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI"),
     exclude: Optional[str] = typer.Option(None, "--exclude", "-e", help="Comma-separated list of directory names to exclude"),
     max_depth: Optional[int] = typer.Option(None, "--max-depth", "-d", help="Maximum directory depth to traverse"),
-    export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)")
+    export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)"),
+    exclude_untracked: bool = typer.Option(False, "--exclude-untracked", help="Ignore repositories that only have untracked files")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
     base_path = Path(directory).expanduser().resolve()
@@ -572,7 +578,7 @@ def scan(
     # Route 1: TUI Mode
     if interactive:
         try:
-            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=final_max_depth)
+            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=final_max_depth, exclude_untracked=exclude_untracked)
             tui_app.run()
             rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
         except Exception as e:
@@ -584,7 +590,7 @@ def scan(
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
         repos = list(find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth))
         with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
-            results = executor.map(get_repo_details, repos)
+            results = executor.map(lambda r: get_repo_details(r, exclude_untracked), repos)
             dirty_repos = [r for r in results if r is not None]
 
     if not dirty_repos:
