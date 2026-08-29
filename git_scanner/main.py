@@ -1,4 +1,5 @@
 import sys
+import re
 import os
 import json
 import csv
@@ -162,9 +163,29 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
         branch = "HEAD"
         if lines and lines[0].startswith('## '):
             branch_line = lines[0][3:]
+
+            ahead = 0
+            behind = 0
+            ahead_match = re.search(r'ahead (\d+)', branch_line)
+            if ahead_match:
+                ahead = int(ahead_match.group(1))
+            behind_match = re.search(r'behind (\d+)', branch_line)
+            if behind_match:
+                behind = int(behind_match.group(1))
+
             branch = branch_line.split('...')[0].strip()
             if branch.startswith('No commits yet on '):
                 branch = branch.replace('No commits yet on ', '')
+
+            display_branch = branch
+            status = []
+            if ahead > 0:
+                status.append(f"↑{ahead}")
+            if behind > 0:
+                status.append(f"↓{behind}")
+            if status:
+                display_branch = f"{branch} [{' '.join(status)}]"
+
             lines = lines[1:]
 
         if not lines:
@@ -192,6 +213,7 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
         return {
             'path': repo_path,
             'branch': branch,
+            'display_branch': display_branch if 'display_branch' in locals() else branch,
             'modified': modified,
             'untracked': untracked,
             'last_commit': last_commit,
@@ -396,17 +418,18 @@ class GitScannerTUI(App):
         screen_width = self.size.width if self.size and self.size.width > 0 else 100
         dynamic_max_len = max(20, screen_width - 55)
 
+
         with self.batch_update():
             for idx, repo in enumerate(sorted_repos, 1):
-                table.add_row(
-                    str(idx),
-                    truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
-                    str(repo['branch']),
-                    str(repo['modified']),
-                    str(repo['untracked']),
-                    str(repo.get('last_commit', 'Unknown')),
-                    key=str(repo['path'])
-                )
+              table.add_row(
+                  str(idx),
+                  truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
+                  str(repo.get('display_branch', repo['branch'])),
+                  str(repo['modified']),
+                  str(repo['untracked']),
+                  str(repo.get('last_commit', 'Unknown')),
+                  key=str(repo['path'])
+              )
 
     def on_resize(self, event) -> None:
         """Dynamically re-render table rows when window size changes."""
@@ -632,7 +655,7 @@ def scan(
         table.add_row(
             str(idx),
             str(repo['path']),
-            str(repo['branch']),
+            str(repo.get('display_branch', repo['branch'])),
             str(repo['modified']),
             str(repo['untracked']),
             str(repo.get('last_commit', 'Unknown'))
