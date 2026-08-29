@@ -1,4 +1,5 @@
 import sys
+import re
 import os
 import json
 import csv
@@ -162,9 +163,28 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
         branch = "HEAD"
         if lines and lines[0].startswith('## '):
             branch_line = lines[0][3:]
+
+            ahead = 0
+            behind = 0
+            ahead_match = re.search(r'ahead (\d+)', branch_line)
+            if ahead_match:
+                ahead = int(ahead_match.group(1))
+            behind_match = re.search(r'behind (\d+)', branch_line)
+            if behind_match:
+                behind = int(behind_match.group(1))
+
             branch = branch_line.split('...')[0].strip()
             if branch.startswith('No commits yet on '):
                 branch = branch.replace('No commits yet on ', '')
+
+            status = []
+            if ahead > 0:
+                status.append(f"↑{ahead}")
+            if behind > 0:
+                status.append(f"↓{behind}")
+            if status:
+                branch = f"{branch} [{' '.join(status)}]"
+
             lines = lines[1:]
 
         if not lines:
