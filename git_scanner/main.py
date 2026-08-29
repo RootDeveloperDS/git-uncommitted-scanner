@@ -177,13 +177,14 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
             if branch.startswith('No commits yet on '):
                 branch = branch.replace('No commits yet on ', '')
 
+            display_branch = branch
             status = []
             if ahead > 0:
                 status.append(f"↑{ahead}")
             if behind > 0:
                 status.append(f"↓{behind}")
             if status:
-                branch = f"{branch} [{' '.join(status)}]"
+                display_branch = f"{branch} [{' '.join(status)}]"
 
             lines = lines[1:]
 
@@ -212,6 +213,7 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
         return {
             'path': repo_path,
             'branch': branch,
+            'display_branch': display_branch if 'display_branch' in locals() else branch,
             'modified': modified,
             'untracked': untracked,
             'last_commit': last_commit,
@@ -420,7 +422,7 @@ class GitScannerTUI(App):
             table.add_row(
                 str(idx),
                 truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
-                str(repo['branch']),
+                str(repo.get('display_branch', repo['branch'])),
                 str(repo['modified']),
                 str(repo['untracked']),
                 str(repo.get('last_commit', 'Unknown')),
@@ -651,7 +653,7 @@ def scan(
         table.add_row(
             str(idx),
             str(repo['path']),
-            str(repo['branch']),
+            str(repo.get('display_branch', repo['branch'])),
             str(repo['modified']),
             str(repo['untracked']),
             str(repo.get('last_commit', 'Unknown'))
