@@ -32,7 +32,7 @@ pip install git-uncommitted-scanner
 The package installs a global executable command `scanrepos` that runs in two distinct modes:
 
 ### 1. Standard CLI Mode
-Run a rapid background scan that outputs a styled `Rich` table listing all uncommitted repositories.
+Run a rapid background scan that outputs a styled `Rich` table listing all uncommitted repositories along with branch names, modified file counts, and untracked file counts.
 
 ```bash
 # Scan the current directory
@@ -40,21 +40,30 @@ scanrepos
 
 # Scan a specific directory path
 scanrepos /path/to/your/projects
+
+# Limit search depth to 3 levels
+scanrepos /path/to/projects -d 3
+
+# Exclude specific folders (e.g. node_modules, build, vendor)
+scanrepos /path/to/projects -e "vendor,build"
+
+# Export results to JSON
+scanrepos /path/to/projects --export scan_results.json
 ```
 
 ### 2. Interactive TUI Mode (`-i`)
-Launch the Neon-Cyan Terminal User Interface. Navigate repositories with keyboard arrows and spawn a native shell terminal directly inside the highlighted workspace.
+Launch the Neon-Cyan Terminal User Interface. Navigate repositories with keyboard arrows, double-click or press <kbd>Enter</kbd> to spawn a native shell terminal directly inside the highlighted workspace.
 
 ```bash
 # Launch TUI in the current directory
 scanrepos -i
 
-# Launch TUI for a specific path
-scanrepos -i /path/to/your/projects
+# Launch TUI with custom path and exclusions
+scanrepos -i /path/to/your/projects -e "vendor,temp"
 ```
 
 #### TUI Keyboard Controls:
-* <kbd>o</kbd> : Spawn native OS terminal (`cmd`, `Terminal.app`, `gnome-terminal`, `alacritty`, etc.) in the selected repository.
+* <kbd>Enter</kbd> / Double-Click / <kbd>o</kbd> : Spawn native OS terminal (`cmd`, `Terminal.app`, `gnome-terminal`, `alacritty`, etc.) in the selected repository.
 * <kbd>r</kbd> : Trigger an asynchronous re-scan of the target folder.
 * <kbd>q</kbd> : Quit the application.
 
