@@ -13,3 +13,8 @@
 - 🎯 **Bottleneck**: Adding rows individually to a Textual DataTable triggered excessive rendering repaints, degrading TUI responsiveness for large workspaces.
 - 📊 **Impact**: Reduces UI blocking time linearly with respect to the number of rows inserted, significantly smoothing the transition when scan results are revealed.
 - 🧪 **Verification**: Ran TUI and benchmarked `DataTable.add_row` loops locally confirming the speedup.
+
+### [2024-08-30] Generator Streaming Optimization
+- **Discovery**: Wrapping generator functions (like directory traversal) in `list()` before passing to ThreadPoolExecutor causes unnecessary serialization, waiting for the entire filesystem tree to be traversed before performing concurrent checking logic.
+- **Action**: Removed `list()` wrapping from `find_git_repos` calls in both TUI (`scan_directories`) and CLI (`scan`) modes.
+- **Impact**: Enables processing of git directories concurrently with ongoing filesystem traversal, significantly reducing time-to-completion for large trees.
