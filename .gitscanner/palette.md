@@ -15,3 +15,11 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+### UX Upgrade - TUI Dynamic Status Bar Styling
+- Implemented dynamic CSS class toggling for `#status-bar` to provide immediate visual feedback based on the application state.
+- Added three distinct states with specialized color profiles:
+  - `status-loading` (Dark Blue/Neon Cyan) during active background directory scans.
+  - `status-success` (Dark Green/Neon Green) when zero uncommitted repositories are found.
+  - `status-warning` (Dark Orange/Neon Orange) when uncommitted repositories are detected.
+- Replaced static fallback styles by dynamically managing classes (`add_class` / `remove_class`) in `action_refresh_scan` and `update_table`.
