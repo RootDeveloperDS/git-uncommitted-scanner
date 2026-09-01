@@ -319,6 +319,16 @@ class GitScannerTUI(App):
         border-top: solid #00ffff;
     }
     
+    #status-bar.success {
+        color: #00ff00;
+        border-top: solid #00ff00;
+    }
+
+    #status-bar.warning {
+        color: #ffff00;
+        border-top: solid #ffff00;
+    }
+
     LoadingIndicator { color: #00ffff; height: 1fr; }
     """
     
@@ -368,7 +378,9 @@ class GitScannerTUI(App):
         
         table.display = False
         loader.display = True
-        self.query_one("#status-bar", Label).update(f"⏳ SCANNING DIRECTORY: {self.target_dir}")
+        status = self.query_one("#status-bar", Label)
+        status.remove_class("success", "warning")
+        status.update(f"⏳ SCANNING DIRECTORY: {self.target_dir}")
         
         self.run_worker(self.scan_directories, thread=True, exclusive=True)
 
@@ -454,12 +466,15 @@ class GitScannerTUI(App):
         loader.display = False
         table.display = True
         
+        status.remove_class("success", "warning")
         if not repos:
             table.clear()
             status.update("✅ ALL REPOSITORIES SECURED AND COMMITTED")
+            status.add_class("success")
             return
             
         status.update(f"⚠️ DETECTED {len(repos)} REPOSITORIES REQUIRING ATTENTION")
+        status.add_class("warning")
 
         # Re-apply active search filter if input is visible
         search_input = self.query_one("#search-input", Input)
@@ -575,7 +590,8 @@ def scan(
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI"),
     exclude: Optional[str] = typer.Option(None, "--exclude", "-e", help="Comma-separated list of directory names to exclude"),
     max_depth: Optional[int] = typer.Option(None, "--max-depth", "-d", help="Maximum directory depth to traverse"),
-    export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)")
+    export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress all rich UI elements and output only raw directory paths")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
     base_path = Path(directory).expanduser().resolve()
@@ -605,6 +621,17 @@ def scan(
         return
 
     # Route 2: CLI Mode
+    if quiet:
+        repos = list(find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth))
+        with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
+            results = executor.map(get_repo_details, repos)
+            dirty_repos = [r for r in results if r is not None]
+        if not dirty_repos:
+            return
+        for repo in dirty_repos:
+            print(str(repo['path']))
+        return
+
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
         repos = list(find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth))
         with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
