@@ -9,3 +9,6 @@
 ## Enhanced Upstream Sync Status
 - **Ahead/Behind Counts**: Enhanced branch name extraction in `get_repo_details()` to parse ahead and behind upstream commit counts from `git status --porcelain -b`.
 - **Visual Indicators**: The branch name now displays visual indicators `[↑X ↓Y]` directly in the TUI and CLI `Table` for repositories that are out of sync with their upstream counterparts, providing immediate actionable insights on push/pull requirements.
+
+## CLI Scripting Capabilities
+- Added `--quiet` (`-q`) flag to CLI. This allows suppressing all Rich UI elements, spinners, and tables to output raw directory paths, which is very useful for shell scripting and piping to tools like `xargs`.
