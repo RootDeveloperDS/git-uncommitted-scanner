@@ -13,3 +13,8 @@
 - 🎯 **Bottleneck**: Adding rows individually to a Textual DataTable triggered excessive rendering repaints, degrading TUI responsiveness for large workspaces.
 - 📊 **Impact**: Reduces UI blocking time linearly with respect to the number of rows inserted, significantly smoothing the transition when scan results are revealed.
 - 🧪 **Verification**: Ran TUI and benchmarked `DataTable.add_row` loops locally confirming the speedup.
+
+### Performance Optimization: Generator-based ThreadPoolExecutor Submissions
+- **Bottleneck**: Using `list()` on the directory traversal generator blocked the thread pool from starting work until the entire disk was traversed, artificially inflating latency.
+- **Optimization**: Removed `list()` wrappers around `find_git_repos()` to allow `ThreadPoolExecutor` to consume the generator lazily or concurrently. Added an `if worker.is_cancelled: break` check in the TUI worker's dynamic submission loop for early termination.
+- **Impact**: CPU/IO overlap increases concurrency, leading to faster startup times in both TUI and CLI modes for large folder trees, while also reducing memory overhead.
