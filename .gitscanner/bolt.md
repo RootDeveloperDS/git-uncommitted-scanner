@@ -13,3 +13,6 @@
 - 🎯 **Bottleneck**: Adding rows individually to a Textual DataTable triggered excessive rendering repaints, degrading TUI responsiveness for large workspaces.
 - 📊 **Impact**: Reduces UI blocking time linearly with respect to the number of rows inserted, significantly smoothing the transition when scan results are revealed.
 - 🧪 **Verification**: Ran TUI and benchmarked `DataTable.add_row` loops locally confirming the speedup.
+## Optimization: Maximize Concurrency
+
+Passed generators directly to ThreadPoolExecutor in TUI and CLI modes to prevent blocking on directory traversal, improving responsiveness and scan times.
