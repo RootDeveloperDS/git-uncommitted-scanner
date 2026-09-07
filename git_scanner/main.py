@@ -6,6 +6,7 @@ import csv
 import subprocess
 import configparser
 import shutil
+import contextlib
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, List, Any
@@ -575,7 +576,8 @@ def scan(
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI"),
     exclude: Optional[str] = typer.Option(None, "--exclude", "-e", help="Comma-separated list of directory names to exclude"),
     max_depth: Optional[int] = typer.Option(None, "--max-depth", "-d", help="Maximum directory depth to traverse"),
-    export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)")
+    export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress rich output and only print raw paths")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
     base_path = Path(directory).expanduser().resolve()
@@ -605,14 +607,16 @@ def scan(
         return
 
     # Route 2: CLI Mode
-    with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
+    ctx = contextlib.nullcontext() if quiet else console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots")
+    with ctx:
         repos = list(find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth))
         with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
             results = executor.map(get_repo_details, repos)
             dirty_repos = [r for r in results if r is not None]
 
     if not dirty_repos:
-        rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
+        if not quiet:
+            rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
         return
 
     if export:
@@ -641,27 +645,32 @@ def scan(
         else:
             export_file.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
 
-        rprint(f"[bold green]📄 Exported scan results ({len(dirty_repos)} repos) to {export_file.resolve()}[/bold green]")
+        if not quiet:
+            rprint(f"[bold green]📄 Exported scan results ({len(dirty_repos)} repos) to {export_file.resolve()}[/bold green]")
 
-    table = Table(title="Uncommitted Repositories", show_header=True, header_style="bold magenta")
-    table.add_column("No.", style="dim", width=4)
-    table.add_column("Repository Path", style="cyan")
-    table.add_column("Branch", style="green")
-    table.add_column("Modified", style="yellow", justify="right")
-    table.add_column("Untracked", style="red", justify="right")
-    table.add_column("Last Commit", style="blue")
+    if not quiet:
+        table = Table(title="Uncommitted Repositories", show_header=True, header_style="bold magenta")
+        table.add_column("No.", style="dim", width=4)
+        table.add_column("Repository Path", style="cyan")
+        table.add_column("Branch", style="green")
+        table.add_column("Modified", style="yellow", justify="right")
+        table.add_column("Untracked", style="red", justify="right")
+        table.add_column("Last Commit", style="blue")
 
-    for idx, repo in enumerate(dirty_repos, 1):
-        table.add_row(
-            str(idx),
-            str(repo['path']),
-            str(repo.get('display_branch', repo['branch'])),
-            str(repo['modified']),
-            str(repo['untracked']),
-            str(repo.get('last_commit', 'Unknown'))
-        )
+        for idx, repo in enumerate(dirty_repos, 1):
+            table.add_row(
+                str(idx),
+                str(repo['path']),
+                str(repo.get('display_branch', repo['branch'])),
+                str(repo['modified']),
+                str(repo['untracked']),
+                str(repo.get('last_commit', 'Unknown'))
+            )
 
-    console.print(table)
+        console.print(table)
+    else:
+        for repo in dirty_repos:
+            print(str(repo['path']))
 
 if __name__ == "__main__":
     app()
