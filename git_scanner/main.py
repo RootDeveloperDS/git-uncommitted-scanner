@@ -376,16 +376,19 @@ class GitScannerTUI(App):
         worker = get_current_worker()
         dirty_repos = []
         
-        repos = list(find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth))
-        if worker.is_cancelled:
-            return
+        repos_generator = find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth)
 
         executor = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4))
         try:
-            futures = [executor.submit(get_repo_details, repo_path) for repo_path in repos]
+            futures = []
+            for repo_path in repos_generator:
+                if worker.is_cancelled:
+                    break
+                futures.append(executor.submit(get_repo_details, repo_path))
+
             for future in as_completed(futures):
                 if worker.is_cancelled:
-                    return
+                    break
                 details = future.result()
                 if details:
                     dirty_repos.append(details)
@@ -606,9 +609,9 @@ def scan(
 
     # Route 2: CLI Mode
     with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
-        repos = list(find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth))
+        repos_generator = find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth)
         with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
-            results = executor.map(get_repo_details, repos)
+            results = executor.map(get_repo_details, repos_generator)
             dirty_repos = [r for r in results if r is not None]
 
     if not dirty_repos:
