@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, List, Any
+import contextlib
 
 import typer
 from rich.console import Console
@@ -575,13 +576,15 @@ def scan(
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI"),
     exclude: Optional[str] = typer.Option(None, "--exclude", "-e", help="Comma-separated list of directory names to exclude"),
     max_depth: Optional[int] = typer.Option(None, "--max-depth", "-d", help="Maximum directory depth to traverse"),
-    export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)")
+    export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress output and only print raw directory paths for piping")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
     base_path = Path(directory).expanduser().resolve()
     
     if not base_path.exists() or not base_path.is_dir():
-        rprint(f"[bold red]❌ Error:[/bold red] Directory '{base_path}' does not exist.")
+        if not quiet:
+            rprint(f"[bold red]❌ Error:[/bold red] Directory '{base_path}' does not exist.")
         raise typer.Exit(code=1)
 
     config = load_config(base_path)
@@ -598,18 +601,26 @@ def scan(
         try:
             tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=final_max_depth)
             tui_app.run()
-            rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
+            if not quiet:
+                rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
         except Exception as e:
-            rprint(f"\n[bold red]❌ CRITICAL TUI ERROR:[/bold red] {e}")
-            console.print_exception()
+            if not quiet:
+                rprint(f"\n[bold red]❌ CRITICAL TUI ERROR:[/bold red] {e}")
+                console.print_exception()
         return
 
     # Route 2: CLI Mode
-    with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
+    status_context = contextlib.nullcontext() if quiet else console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots")
+    with status_context:
         repos = list(find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth))
         with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
             results = executor.map(get_repo_details, repos)
             dirty_repos = [r for r in results if r is not None]
+
+    if quiet:
+        for repo in dirty_repos:
+            print(str(repo['path']))
+        return
 
     if not dirty_repos:
         rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
