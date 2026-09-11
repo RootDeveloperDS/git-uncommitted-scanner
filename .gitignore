@@ -3,3 +3,4 @@ build/
 dist/
 __pycache__/
 _myinfo_.md
+mock_tree
