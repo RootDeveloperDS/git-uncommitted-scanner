@@ -9,3 +9,9 @@
 ## Enhanced Upstream Sync Status
 - **Ahead/Behind Counts**: Enhanced branch name extraction in `get_repo_details()` to parse ahead and behind upstream commit counts from `git status --porcelain -b`.
 - **Visual Indicators**: The branch name now displays visual indicators `[↑X ↓Y]` directly in the TUI and CLI `Table` for repositories that are out of sync with their upstream counterparts, providing immediate actionable insights on push/pull requirements.
+
+## Quiet Output Mode
+- Added a `--quiet` / `-q` flag to the CLI `scan` command.
+- When enabled, it suppresses all `rich` terminal output (including the animated `console.status` spinner, emojis, and formatted tables).
+- The scanner will output *only* the raw, absolute directory paths of dirty repositories, one per line.
+- This allows developers to seamlessly pipe the output to other shell tools like `xargs`, `jq` (if combined with `--export`), or custom scripts without formatting garbage breaking the pipeline.
