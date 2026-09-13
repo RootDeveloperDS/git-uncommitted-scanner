@@ -15,3 +15,8 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+### UX Upgrade - TUI Dynamic Status Bar Styling
+- Replaced static status bar coloring with dynamic CSS classes (`.status-success`, `.status-warning`, `.status-error`).
+- Updated `action_refresh_scan`, `update_table`, and `action_open_terminal` to toggle these classes to provide immediate, clear visual state feedback to users.
+- Discovered that Textual widgets manage their classes in a `frozenset` accessed via `widget.classes`, and adding/removing them programmatically correctly rerenders the widget.
