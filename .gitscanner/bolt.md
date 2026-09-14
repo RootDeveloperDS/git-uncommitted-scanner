@@ -13,3 +13,10 @@
 - 🎯 **Bottleneck**: Adding rows individually to a Textual DataTable triggered excessive rendering repaints, degrading TUI responsiveness for large workspaces.
 - 📊 **Impact**: Reduces UI blocking time linearly with respect to the number of rows inserted, significantly smoothing the transition when scan results are revealed.
 - 🧪 **Verification**: Ran TUI and benchmarked `DataTable.add_row` loops locally confirming the speedup.
+
+## Optimization: Generator iteration for ThreadPoolExecutor
+- **Bottleneck**: Wrapping `find_git_repos` in `list()` blocked task submission until all directories were traversed.
+- **Identification**: Profiled CLI and TUI worker task submission speed.
+- **Metric**: Reduces blocking overhead before threaded git status checks start executing, improving throughput on deep directory trees.
+- **Practical Value**: Large workspace scans begin displaying results faster and overall scan time is reduced due to immediate concurrency.
+- **Verification**: Executed benchmark scripts validating faster completion times with large directory structures.
