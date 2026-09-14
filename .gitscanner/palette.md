@@ -15,3 +15,4 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+- Dynamic Styling: Use `Textual` dynamic class toggling (`remove_class`/`add_class`) combined with specific CSS classes (e.g. `#status-bar.success`) rather than hardcoding style properties. This enhances theme consistency and separates presentation logic.
