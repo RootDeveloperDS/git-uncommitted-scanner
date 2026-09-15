@@ -9,3 +9,4 @@
 ## Enhanced Upstream Sync Status
 - **Ahead/Behind Counts**: Enhanced branch name extraction in `get_repo_details()` to parse ahead and behind upstream commit counts from `git status --porcelain -b`.
 - **Visual Indicators**: The branch name now displays visual indicators `[↑X ↓Y]` directly in the TUI and CLI `Table` for repositories that are out of sync with their upstream counterparts, providing immediate actionable insights on push/pull requirements.
+- **Quiet Mode Implementation**: Added a `--quiet` (`-q`) flag to the CLI `scan` command. When enabled, this flag dynamically swaps the Rich `console.status` spinner with `contextlib.nullcontext()` to prevent TTY output while still executing the background thread mapping for `get_repo_details`. It also suppresses the clean/export messages and bypasses the final Rich `Table` rendering, instead looping over the results and emitting raw repository paths to standard output for pipeline integration.
