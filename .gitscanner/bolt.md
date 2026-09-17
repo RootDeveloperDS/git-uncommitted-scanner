@@ -13,3 +13,8 @@
 - 🎯 **Bottleneck**: Adding rows individually to a Textual DataTable triggered excessive rendering repaints, degrading TUI responsiveness for large workspaces.
 - 📊 **Impact**: Reduces UI blocking time linearly with respect to the number of rows inserted, significantly smoothing the transition when scan results are revealed.
 - 🧪 **Verification**: Ran TUI and benchmarked `DataTable.add_row` loops locally confirming the speedup.
+
+## [2024-05-18] Directory Traversal Streaming Optimization
+- **Bottleneck:** Casting the entire directory tree traversal generator to a `list()` blocked worker thread execution and delayed `git status` subprocesses from starting until full disk scan was completed.
+- **Optimization:** Replaced `list()` casting with direct generator consumption via `executor.map` (CLI) and loop yielding (TUI) with early cancellation checks.
+- **Impact:** Decreased scan execution latency and improved early responsiveness by pipelining file system discovery directly into concurrent subprocess execution.

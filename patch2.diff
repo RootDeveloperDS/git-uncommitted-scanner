@@ -1,0 +1,92 @@
+<<<<<<< SEARCH
+        repos = find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth)
+
+        executor = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4))
+        try:
+            for repo_path in repos:
+                if worker.is_cancelled:
+                    break
+                future = executor.submit(get_repo_details, repo_path)
+                details = future.result()
+                if details:
+                    dirty_repos.append(details)
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+        self.call_from_thread(self.update_table, dirty_repos)
+=======
+        import concurrent.futures
+        repos = find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth)
+
+        max_workers = min(32, (os.cpu_count() or 4) * 4)
+        executor = ThreadPoolExecutor(max_workers=max_workers)
+        try:
+            futures = set()
+            for _ in range(max_workers):
+                try:
+                    repo_path = next(repos)
+                    futures.add(executor.submit(get_repo_details, repo_path))
+                except StopIteration:
+                    break
+
+            while futures:
+                if worker.is_cancelled:
+                    break
+
+                done, futures = concurrent.futures.wait(futures, return_when=concurrent.futures.FIRST_COMPLETED)
+
+                for future in done:
+                    details = future.result()
+                    if details:
+                        dirty_repos.append(details)
+
+                for _ in range(len(done)):
+                    if worker.is_cancelled:
+                        break
+                    try:
+                        repo_path = next(repos)
+                        futures.add(executor.submit(get_repo_details, repo_path))
+                    except StopIteration:
+                        break
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+        self.call_from_thread(self.update_table, dirty_repos)
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+    # Route 2: CLI Mode
+    with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
+        repos = find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth)
+        with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
+            results = executor.map(get_repo_details, repos)
+            dirty_repos = [r for r in results if r is not None]
+=======
+    # Route 2: CLI Mode
+    with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
+        import concurrent.futures
+        repos = find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth)
+        dirty_repos = []
+        max_workers = min(32, (os.cpu_count() or 4) * 4)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = set()
+            for _ in range(max_workers):
+                try:
+                    repo_path = next(repos)
+                    futures.add(executor.submit(get_repo_details, repo_path))
+                except StopIteration:
+                    break
+
+            while futures:
+                done, futures = concurrent.futures.wait(futures, return_when=concurrent.futures.FIRST_COMPLETED)
+                for future in done:
+                    details = future.result()
+                    if details:
+                        dirty_repos.append(details)
+
+                for _ in range(len(done)):
+                    try:
+                        repo_path = next(repos)
+                        futures.add(executor.submit(get_repo_details, repo_path))
+                    except StopIteration:
+                        break
+>>>>>>> REPLACE
