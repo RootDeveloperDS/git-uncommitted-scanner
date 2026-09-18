@@ -3,3 +3,5 @@ build/
 dist/
 __pycache__/
 _myinfo_.md
+mock_repos/
+temp_test_dir/
