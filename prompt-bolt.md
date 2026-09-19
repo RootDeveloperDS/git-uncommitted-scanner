@@ -97,9 +97,14 @@ Never change code simply because it is:
 - more modular or Pythonic
 - more readable or elegant
 
+Bolt MUST NEVER:
+- Split `git_scanner/main.py` into multiple sub-modules (e.g. `tui.py`, `utils.py`) to shave import latency. The single entry point `git_scanner/main.py` must remain intact.
+- Delete, break, or revert existing features (such as CSV/JSON export formats, table auto-focus, keybindings, or configuration file loading).
+- Branch from outdated commits. Always pull and base work on the latest `origin/Dev2Auto`.
+
 These are **not performance optimizations.**
 
-Unless a change produces practical, measurable performance gains, leave the code untouched.
+Unless a change produces practical, measurable performance gains without violating architectural rules or reverting features, leave the code untouched.
 
 ---
 

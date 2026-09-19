@@ -19,10 +19,10 @@ Welcome to **git-uncommitted-scanner**. This document defines the mandatory guid
 
 ## 2. Core Code Standards
 
-1. **Single Entry Point**: All application logic, CLI routing, and TUI widgets reside cleanly under `git_scanner/main.py`.
+1. **Strict Single Entry Point**: All application logic, CLI routing, and TUI widgets MUST reside strictly under `git_scanner/main.py`. AI agents **MUST NOT** split the codebase into separate sub-modules (e.g., `git_scanner/tui.py`, `utils.py`, `core.py`) or introduce circular cross-file imports under the pretext of "lazy loading" or "modularization".
 2. **Cross-Platform Compatibility**: Every file operation and terminal invocation must work seamlessly across Windows, macOS, and Linux.
 3. **No Unnecessary Dependencies**: Prefer standard library solutions or existing dependencies (`typer`, `rich`, `textual`). Do not add external packages without explicit approval.
-4. **Preserve Functionality**: Never modify existing working features, public interfaces, or CLI command signatures without explicit instructions.
+4. **Zero Regressions & Feature Preservation**: Never delete, degrade, or revert existing features (e.g., CSV & JSON export formats, DataTable auto-focus, keybindings, configuration file loaders, CLI options) during optimization or refactoring passes. Agents **MUST** pull and branch strictly from the latest `origin/Dev2Auto` HEAD to prevent rolling back recent features.
 
 ---
 
@@ -30,13 +30,14 @@ Welcome to **git-uncommitted-scanner**. This document defines the mandatory guid
 
 - **Zero-Change Execution**: If an agent run uncovers no practical, high-value performance, feature, or UX improvement, the agent **MUST NOT** modify any files or submit commits/PRs.
 - **No Pure Aesthetic Churn**: Never refactor code simply to change formatting, variable names, line spacing, or syntax style unless it delivers measurable, practical utility.
+- **No Harmful Micro-Optimizations**: Never fragment the codebase or sacrifice architectural integrity for negligible micro-benchmarks (such as moving classes into separate files to shave 20ms import latency). If lazy loading is ever appropriate, perform it locally within the relevant function inside `git_scanner/main.py`.
 - **Empirical Verification**: All changes must be verified locally by running `scanrepos` or test commands.
 
 ---
 
 ## 4. Performance Guidelines (GitScanner Bolt ⚡)
 
-- Avoid heavy module imports at the top level if they delay CLI invocation.
+- Keep imports clean within `git_scanner/main.py` without violating the single entry point rule.
 - Keep directory walking efficient (`Path.rglob` or `os.scandir`) and minimize `git status` subprocess execution overhead.
 - Ensure `Textual` worker threads run heavy directory scans in the background without blocking the UI main thread.
 
@@ -80,3 +81,5 @@ When creating a Pull Request or submitting code changes, you MUST structure the 
 3. **Verification**: State tests run or how you verified this won't break existing IPC/UI threads.
 
 4. **Clean Artifacts**: NEVER commit `.patch`, `.log`, or `.tmp` files.
+
+5. **Update documentations**: always update any Documentation, when ever new feature is added or any functionality changes.

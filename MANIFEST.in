@@ -1,0 +1,7 @@
+include readme.md
+include CHANGELOG.md
+include AGENTS.md
+include pyproject.toml
+prune docs
+prune .gitscanner
+global-exclude *.py[cod] __pycache__ *.so *.dylib
