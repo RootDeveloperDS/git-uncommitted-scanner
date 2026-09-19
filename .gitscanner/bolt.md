@@ -13,3 +13,9 @@
 - 🎯 **Bottleneck**: Adding rows individually to a Textual DataTable triggered excessive rendering repaints, degrading TUI responsiveness for large workspaces.
 - 📊 **Impact**: Reduces UI blocking time linearly with respect to the number of rows inserted, significantly smoothing the transition when scan results are revealed.
 - 🧪 **Verification**: Ran TUI and benchmarked `DataTable.add_row` loops locally confirming the speedup.
+
+### 2024 - Parallelized Generator Evaluation for Repository Scans
+- **Bottleneck**: The `scan_directories` TUI worker and the `scan` CLI command previously wrapped the `find_git_repos` generator in a `list()`. This forced the entire directory traversal (which can be very slow for deep or large nested directory structures) to completely block and finish before *any* discovered repositories were submitted to the ThreadPoolExecutor for background git status checks.
+- **Optimization**: Changed both code paths to pass the generator directly to the thread pool executor (via dynamic iteration & `executor.submit()` in TUI, and `executor.map()` in CLI). This ensures asynchronous git processes start computing as soon as the first repositories are found, eliminating the traversal bottleneck.
+- **Impact**: Measurably faster initial startup and total scan times, specifically when the target directory structure is deep and slow to search. Measured total mapping speedup via `benchmark4.py` script.
+- **Metric**: Execution mapping speed reduced blocking latency; total execution overlapping increased throughput overall.
