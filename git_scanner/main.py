@@ -6,6 +6,7 @@ import csv
 import subprocess
 import configparser
 import shutil
+import contextlib
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, List, Any
@@ -19,6 +20,14 @@ from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Label, LoadingIndicator, Input
 from textual.binding import Binding
 from textual.worker import get_current_worker
+
+__version__ = "0.2.0"
+
+
+def version_callback(value: bool) -> None:
+    if value:
+        rprint(f"[bold cyan]git-uncommitted-scanner[/bold cyan] [bold green]v{__version__}[/bold green]")
+        raise typer.Exit()
 
 # ---------------------------------------------------------
 # CORE LOGIC & CONFIGURATION
@@ -148,7 +157,7 @@ def find_git_repos(
             continue
 
 
-def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
+def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Optional[Dict[str, Any]]:
     """Checks if a git repo has uncommitted changes and returns status details including branch and last commit age."""
     try:
         status_result = subprocess.run(
@@ -193,6 +202,9 @@ def get_repo_details(repo_path: Path) -> Optional[Dict[str, Any]]:
 
         untracked = sum(1 for line in lines if line.startswith('??'))
         modified = len(lines) - untracked
+
+        if exclude_untracked and modified == 0:
+            return None
 
         last_commit = "Unknown"
         last_commit_timestamp = 0
@@ -335,12 +347,14 @@ class GitScannerTUI(App):
         self,
         target_dir: Path,
         exclude: Optional[List[str]] = None,
-        max_depth: Optional[int] = None
+        max_depth: Optional[int] = None,
+        exclude_untracked: bool = False
     ):
         super().__init__()
         self.target_dir = target_dir
         self.exclude = exclude
         self.max_depth = max_depth
+        self.exclude_untracked = exclude_untracked
         self.current_repos: List[Dict[str, Any]] = []
         self.sort_column: Optional[int] = None
         self.sort_reverse: bool = False
@@ -376,13 +390,17 @@ class GitScannerTUI(App):
         worker = get_current_worker()
         dirty_repos = []
         
-        repos = list(find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth))
+        repos = find_git_repos(self.target_dir, exclude=self.exclude, max_depth=self.max_depth)
         if worker.is_cancelled:
             return
 
         executor = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4))
         try:
-            futures = [executor.submit(get_repo_details, repo_path) for repo_path in repos]
+            futures = []
+            for repo_path in repos:
+                if worker.is_cancelled:
+                    return
+                futures.append(executor.submit(get_repo_details, repo_path, self.exclude_untracked))
             for future in as_completed(futures):
                 if worker.is_cancelled:
                     return
@@ -575,7 +593,10 @@ def scan(
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Launch the interactive TUI"),
     exclude: Optional[str] = typer.Option(None, "--exclude", "-e", help="Comma-separated list of directory names to exclude"),
     max_depth: Optional[int] = typer.Option(None, "--max-depth", "-d", help="Maximum directory depth to traverse"),
-    export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)")
+    export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress UI banners and output only raw repository paths"),
+    exclude_untracked: bool = typer.Option(False, "--exclude-untracked", "-u", help="Ignore repositories that contain only untracked files"),
+    version: Optional[bool] = typer.Option(None, "--version", "-v", callback=version_callback, is_eager=True, help="Show the version and exit.")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
     base_path = Path(directory).expanduser().resolve()
@@ -596,7 +617,12 @@ def scan(
     # Route 1: TUI Mode
     if interactive:
         try:
-            tui_app = GitScannerTUI(base_path, exclude=exclude_list, max_depth=final_max_depth)
+            tui_app = GitScannerTUI(
+                base_path,
+                exclude=exclude_list,
+                max_depth=final_max_depth,
+                exclude_untracked=exclude_untracked
+            )
             tui_app.run()
             rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
         except Exception as e:
@@ -605,14 +631,50 @@ def scan(
         return
 
     # Route 2: CLI Mode
-    with console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots"):
-        repos = list(find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth))
+    status_ctx = contextlib.nullcontext() if quiet else console.status(f"[bold cyan]Scanning {base_path}...[/bold cyan]", spinner="dots")
+    with status_ctx:
+        repos = find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth)
         with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
-            results = executor.map(get_repo_details, repos)
-            dirty_repos = [r for r in results if r is not None]
+            futures = [executor.submit(get_repo_details, repo_path, exclude_untracked) for repo_path in repos]
+            dirty_repos = []
+            for future in as_completed(futures):
+                details = future.result()
+                if details:
+                    dirty_repos.append(details)
 
     if not dirty_repos:
-        rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
+        if not quiet:
+            rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
+        return
+
+    # In quiet mode, emit only raw paths (ideal for xargs/piping)
+    if quiet:
+        for repo in dirty_repos:
+            print(str(repo['path']))
+        if export:
+            export_data = [
+                {
+                    "path": str(repo['path']),
+                    "branch": repo['branch'],
+                    "modified": repo['modified'],
+                    "untracked": repo['untracked'],
+                    "last_commit": repo.get('last_commit', 'Unknown'),
+                    "last_commit_timestamp": repo.get('last_commit_timestamp', 0)
+                }
+                for repo in dirty_repos
+            ]
+            export_file = Path(export)
+            if export_file.suffix.lower() == ".csv":
+                with open(export_file, mode='w', newline='', encoding='utf-8') as f:
+                    if export_data:
+                        fieldnames = ["path", "branch", "modified", "untracked", "last_commit", "last_commit_timestamp"]
+                        writer = csv.DictWriter(f, fieldnames=fieldnames)
+                        writer.writeheader()
+                        writer.writerows(export_data)
+                    else:
+                        f.write("path,branch,modified,untracked,last_commit,last_commit_timestamp\n")
+            else:
+                export_file.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
         return
 
     if export:
