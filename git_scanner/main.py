@@ -635,7 +635,9 @@ def scan(
     with status_ctx:
         repos = find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth)
         with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
-            futures = [executor.submit(get_repo_details, repo_path, exclude_untracked) for repo_path in repos]
+            futures = []
+            for repo_path in repos:
+                futures.append(executor.submit(get_repo_details, repo_path, exclude_untracked))
             dirty_repos = []
             for future in as_completed(futures):
                 details = future.result()

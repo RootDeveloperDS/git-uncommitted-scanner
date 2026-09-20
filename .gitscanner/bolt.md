@@ -21,3 +21,6 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+
+## Optimize CLI scan concurrency
+Avoided list comprehensions on directory scan generators to maximize concurrency of subprocess tasks.
