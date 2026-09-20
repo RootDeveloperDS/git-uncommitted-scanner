@@ -15,3 +15,7 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+## CLI Sorting & Determinism
+- **Sorting Options (`--sort` / `-s`)**: Added CLI sorting capabilities to order the output by path, branch, modified count, untracked count, or last commit timestamp.
+- **Reverse Order (`--reverse` / `-r`)**: Added a flag to invert sort direction.
