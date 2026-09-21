@@ -21,3 +21,6 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+# ⚡ GitScanner Bolt Learnings
+
+- **CLI Concurrency Bottleneck Resolved**: Replaced a list comprehension `[executor.submit(...) for repo in repos]` in the CLI route with dynamic appending (`for repo in repos: futures.append(...)`). This prevents the Python generator from being completely exhausted synchronously on the main thread, allowing thread pool workers to begin processing repository details immediately as directories are discovered.
