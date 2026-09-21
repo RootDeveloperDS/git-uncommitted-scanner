@@ -157,7 +157,7 @@ def find_git_repos(
             continue
 
 
-def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Optional[Dict[str, Any]]:
+def get_repo_details(repo_path: Path, exclude_untracked: bool = False, include_unpushed: bool = False) -> Optional[Dict[str, Any]]:
     """Checks if a git repo has uncommitted changes and returns status details including branch and last commit age."""
     try:
         status_result = subprocess.run(
@@ -170,11 +170,11 @@ def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Option
             return None
 
         branch = "HEAD"
+        ahead = 0
+        behind = 0
         if lines and lines[0].startswith('## '):
             branch_line = lines[0][3:]
 
-            ahead = 0
-            behind = 0
             ahead_match = re.search(r'ahead (\d+)', branch_line)
             if ahead_match:
                 ahead = int(ahead_match.group(1))
@@ -197,14 +197,15 @@ def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Option
 
             lines = lines[1:]
 
-        if not lines:
-            return None
-
         untracked = sum(1 for line in lines if line.startswith('??'))
         modified = len(lines) - untracked
 
-        if exclude_untracked and modified == 0:
-            return None
+        is_dirty = modified > 0 or (untracked > 0 and not exclude_untracked)
+        is_unpushed = ahead > 0 or behind > 0
+
+        if not is_dirty:
+            if not (include_unpushed and is_unpushed):
+                return None
 
         last_commit = "Unknown"
         last_commit_timestamp = 0
@@ -229,7 +230,9 @@ def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Option
             'modified': modified,
             'untracked': untracked,
             'last_commit': last_commit,
-            'last_commit_timestamp': last_commit_timestamp
+            'last_commit_timestamp': last_commit_timestamp,
+            'ahead': ahead,
+            'behind': behind
         }
     except Exception:
         return None
@@ -348,13 +351,15 @@ class GitScannerTUI(App):
         target_dir: Path,
         exclude: Optional[List[str]] = None,
         max_depth: Optional[int] = None,
-        exclude_untracked: bool = False
+        exclude_untracked: bool = False,
+        include_unpushed: bool = False
     ):
         super().__init__()
         self.target_dir = target_dir
         self.exclude = exclude
         self.max_depth = max_depth
         self.exclude_untracked = exclude_untracked
+        self.include_unpushed = include_unpushed
         self.current_repos: List[Dict[str, Any]] = []
         self.sort_column: Optional[int] = None
         self.sort_reverse: bool = False
@@ -400,7 +405,7 @@ class GitScannerTUI(App):
             for repo_path in repos:
                 if worker.is_cancelled:
                     return
-                futures.append(executor.submit(get_repo_details, repo_path, self.exclude_untracked))
+                futures.append(executor.submit(get_repo_details, repo_path, self.exclude_untracked, self.include_unpushed))
             for future in as_completed(futures):
                 if worker.is_cancelled:
                     return
@@ -596,6 +601,7 @@ def scan(
     export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress UI banners and output only raw repository paths"),
     exclude_untracked: bool = typer.Option(False, "--exclude-untracked", "-u", help="Ignore repositories that contain only untracked files"),
+    include_unpushed: bool = typer.Option(False, "--include-unpushed", "-p", help="Include clean repositories that are out of sync with upstream (ahead/behind)"),
     version: Optional[bool] = typer.Option(None, "--version", "-v", callback=version_callback, is_eager=True, help="Show the version and exit.")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
@@ -621,7 +627,8 @@ def scan(
                 base_path,
                 exclude=exclude_list,
                 max_depth=final_max_depth,
-                exclude_untracked=exclude_untracked
+                exclude_untracked=exclude_untracked,
+                include_unpushed=include_unpushed
             )
             tui_app.run()
             rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
@@ -635,7 +642,7 @@ def scan(
     with status_ctx:
         repos = find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth)
         with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
-            futures = [executor.submit(get_repo_details, repo_path, exclude_untracked) for repo_path in repos]
+            futures = [executor.submit(get_repo_details, repo_path, exclude_untracked, include_unpushed) for repo_path in repos]
             dirty_repos = []
             for future in as_completed(futures):
                 details = future.result()
@@ -659,7 +666,9 @@ def scan(
                     "modified": repo['modified'],
                     "untracked": repo['untracked'],
                     "last_commit": repo.get('last_commit', 'Unknown'),
-                    "last_commit_timestamp": repo.get('last_commit_timestamp', 0)
+                    "last_commit_timestamp": repo.get('last_commit_timestamp', 0),
+                    "ahead": repo.get('ahead', 0),
+                    "behind": repo.get('behind', 0)
                 }
                 for repo in dirty_repos
             ]
@@ -667,12 +676,12 @@ def scan(
             if export_file.suffix.lower() == ".csv":
                 with open(export_file, mode='w', newline='', encoding='utf-8') as f:
                     if export_data:
-                        fieldnames = ["path", "branch", "modified", "untracked", "last_commit", "last_commit_timestamp"]
+                        fieldnames = ["path", "branch", "modified", "untracked", "last_commit", "last_commit_timestamp", "ahead", "behind"]
                         writer = csv.DictWriter(f, fieldnames=fieldnames)
                         writer.writeheader()
                         writer.writerows(export_data)
                     else:
-                        f.write("path,branch,modified,untracked,last_commit,last_commit_timestamp\n")
+                        f.write("path,branch,modified,untracked,last_commit,last_commit_timestamp,ahead,behind\n")
             else:
                 export_file.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
         return
@@ -685,7 +694,9 @@ def scan(
                 "modified": repo['modified'],
                 "untracked": repo['untracked'],
                 "last_commit": repo.get('last_commit', 'Unknown'),
-                "last_commit_timestamp": repo.get('last_commit_timestamp', 0)
+                "last_commit_timestamp": repo.get('last_commit_timestamp', 0),
+                "ahead": repo.get('ahead', 0),
+                "behind": repo.get('behind', 0)
             }
             for repo in dirty_repos
         ]
@@ -694,12 +705,12 @@ def scan(
         if export_file.suffix.lower() == ".csv":
             with open(export_file, mode='w', newline='', encoding='utf-8') as f:
                 if export_data:
-                    fieldnames = ["path", "branch", "modified", "untracked", "last_commit", "last_commit_timestamp"]
+                    fieldnames = ["path", "branch", "modified", "untracked", "last_commit", "last_commit_timestamp", "ahead", "behind"]
                     writer = csv.DictWriter(f, fieldnames=fieldnames)
                     writer.writeheader()
                     writer.writerows(export_data)
                 else:
-                    f.write("path,branch,modified,untracked,last_commit,last_commit_timestamp\n")
+                    f.write("path,branch,modified,untracked,last_commit,last_commit_timestamp,ahead,behind\n")
         else:
             export_file.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
 
