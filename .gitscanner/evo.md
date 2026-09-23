@@ -15,3 +15,6 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+## Upgrade: Unpushed Commits Detection
+Added detection for repositories with unpushed commits (`ahead` of remote). Developers can now track repositories that have commits ready to be pushed but are otherwise clean in the working directory.
