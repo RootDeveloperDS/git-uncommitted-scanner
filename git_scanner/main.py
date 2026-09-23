@@ -170,11 +170,11 @@ def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Option
             return None
 
         branch = "HEAD"
+        ahead = 0
+        behind = 0
         if lines and lines[0].startswith('## '):
             branch_line = lines[0][3:]
 
-            ahead = 0
-            behind = 0
             ahead_match = re.search(r'ahead (\d+)', branch_line)
             if ahead_match:
                 ahead = int(ahead_match.group(1))
@@ -197,13 +197,13 @@ def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Option
 
             lines = lines[1:]
 
-        if not lines:
+        if not lines and ahead == 0:
             return None
 
         untracked = sum(1 for line in lines if line.startswith('??'))
         modified = len(lines) - untracked
 
-        if exclude_untracked and modified == 0:
+        if exclude_untracked and modified == 0 and ahead == 0:
             return None
 
         last_commit = "Unknown"
