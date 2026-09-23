@@ -21,3 +21,4 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+Replaced list comprehensions and explicit sequential future building in `git_scanner/main.py` with `executor.map(..., generator)` to stream directory traversal discovery concurrently with thread execution processing. This avoids fully synchronizing the generator.
