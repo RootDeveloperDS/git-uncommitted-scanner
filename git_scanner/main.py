@@ -394,17 +394,17 @@ class GitScannerTUI(App):
         if worker.is_cancelled:
             return
 
+        def cancellable_repos():
+            for r in repos:
+                if worker.is_cancelled:
+                    break
+                yield r
+
         executor = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4))
         try:
-            futures = []
-            for repo_path in repos:
+            for details in executor.map(lambda p: get_repo_details(p, self.exclude_untracked), cancellable_repos()):
                 if worker.is_cancelled:
                     return
-                futures.append(executor.submit(get_repo_details, repo_path, self.exclude_untracked))
-            for future in as_completed(futures):
-                if worker.is_cancelled:
-                    return
-                details = future.result()
                 if details:
                     dirty_repos.append(details)
         finally:
@@ -635,10 +635,8 @@ def scan(
     with status_ctx:
         repos = find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth)
         with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
-            futures = [executor.submit(get_repo_details, repo_path, exclude_untracked) for repo_path in repos]
             dirty_repos = []
-            for future in as_completed(futures):
-                details = future.result()
+            for details in executor.map(lambda p: get_repo_details(p, exclude_untracked), repos):
                 if details:
                     dirty_repos.append(details)
 
