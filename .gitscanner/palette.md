@@ -15,3 +15,6 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+# GitScanner Palette 🎨 Journal
+
+- Improved contrast and visual feedback in the TUI status bar by adding dynamic CSS classes (`success` and `warning`) when reporting 0 uncommitted repositories vs found repositories. This makes the state more immediately recognizable to the user without having to read the text.
