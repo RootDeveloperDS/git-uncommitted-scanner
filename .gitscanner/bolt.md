@@ -21,3 +21,10 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+
+## Performance Optimization: Skip Directory Traversal Inside Git Repositories
+
+- 💡 **Optimization**: Added a `continue` statement inside `find_git_repos` to skip scanning subdirectories once a `.git` repository is discovered.
+- 🎯 **Bottleneck**: `find_git_repos` would continue to deeply traverse all subdirectories inside a large git repository (like a monorepo), creating significant I/O and CPU overhead.
+- 📊 **Impact**: Directory scanning latency on deep repositories drops drastically in extreme nested benchmarks by aborting sub-tree traversal immediately upon `.git` discovery.
+- 🧪 **Verification**: Tested locally simulating nested git subdirectories and verified that `git_scanner` correctly identifies repositories while ignoring their inner folders.
