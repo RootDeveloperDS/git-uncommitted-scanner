@@ -330,6 +330,16 @@ class GitScannerTUI(App):
         color: #00ffff;
         border-top: solid #00ffff;
     }
+    #status-bar.success {
+        background: #002200;
+        color: #00ff00;
+        border-top: solid #00ff00;
+    }
+    #status-bar.danger {
+        background: #220000;
+        color: #ff0000;
+        border-top: solid #ff0000;
+    }
     
     LoadingIndicator { color: #00ffff; height: 1fr; }
     """
@@ -474,9 +484,13 @@ class GitScannerTUI(App):
         
         if not repos:
             table.clear()
+            status.remove_class("danger")
+            status.add_class("success")
             status.update("✅ ALL REPOSITORIES SECURED AND COMMITTED")
             return
             
+        status.remove_class("success")
+        status.add_class("danger")
         status.update(f"⚠️ DETECTED {len(repos)} REPOSITORIES REQUIRING ATTENTION")
 
         # Re-apply active search filter if input is visible
