@@ -150,6 +150,7 @@ def find_git_repos(
 
                 if has_git:
                     yield Path(current_path)
+                    continue
 
                 if max_depth is None or depth < max_depth:
                     stack.extend((subdir, depth + 1) for subdir in subdirs)

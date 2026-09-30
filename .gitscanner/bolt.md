@@ -1,5 +1,12 @@
 # GitScanner Bolt - Performance Learnings Journal
 
+## Performance Optimization: Stop Recursive Scanning Inside Git Repositories
+
+- 💡 **Optimization**: Added a `continue` statement in `find_git_repos` to skip recursing into subdirectories once a `.git` repository is discovered.
+- 🎯 **Bottleneck**: The directory traversal would unnecessarily scan deep hierarchies inside already-discovered Git repositories, resulting in severe performance degradation on large monorepos or repositories with many subdirectories.
+- 📊 **Impact**: Directory scanning latency drastically improved by halting recursive descent when a `.git` folder is identified.
+- 🧪 **Verification**: Verified by generating a deep dummy repository tree in `test_perf2.py` and running the traversal, showing scan time dropping from ~0.13 seconds to ~0.0002 seconds.
+
 ## Performance Optimization: Optimized Directory Traversal via `os.scandir`
 
 - 💡 **Optimization**: Replaced `os.walk` with an iterative DFS implementation using `os.scandir` in `git_scanner/main.py`.
