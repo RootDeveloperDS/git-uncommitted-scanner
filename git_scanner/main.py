@@ -548,6 +548,15 @@ class GitScannerTUI(App):
         direction = "Descending (▼ - Newest/Highest)" if (self.sort_reverse and column_index in (3, 4, 5)) else ("Descending (▼)" if self.sort_reverse else ("Ascending (▲ - Oldest/Lowest)" if column_index in (3, 4, 5) else "Ascending (▲)"))
         self.notify(f"Sorted by {col_name}: {direction}")
 
+        table = self.query_one(DataTable)
+        for i, key in enumerate(self.col_keys):
+            if i < len(col_names):
+                table.columns[key].label = col_names[i]
+
+        indicator = "▼" if self.sort_reverse else "▲"
+        if column_index < len(self.col_keys):
+            table.columns[self.col_keys[column_index]].label = f"{col_name} {indicator}"
+
         search_input = self.query_one("#search-input", Input)
         search_term = search_input.value.lower() if search_input.display else ""
         if search_term:
