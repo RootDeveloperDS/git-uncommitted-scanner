@@ -1,3 +1,9 @@
+# 🚀 GitScanner Evo: Added Stash Tracking
+
+- **Stash Tracking capabilities**: Extracted stash count per repository using `git rev-list -g refs/stash` and integrated it into the scanner logic to discover clean repos with hidden stash data.
+- **TUI & CLI Stash integration**: Added a "Stashes" column in Textual and Rich modes to visualize the number of stashes in dirty and unstaged projects.
+- **Export Updates**: "stashes" field natively integrated into both JSON and CSV outputs.
+
 # 🚀 GitScanner Evo: Enhanced Repository Status Metrics
 
 - **Detailed Status Metrics**: Replaced basic boolean dirty check with `get_repo_details()` to extract active branch (`git branch --show-current`), modified file count, and untracked file count (`git status --porcelain`).
