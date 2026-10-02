@@ -15,3 +15,8 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+## Stash Detection Upgrade
+- Added practical capability to detect git stashes (`refs/stash`) as pending work.
+- Upgraded CLI table, TUI sorting, and CSV/JSON export to include stash counts.
+- Addresses the developer problem of forgetting about stashed code when moving between branches across multiple microservices.
