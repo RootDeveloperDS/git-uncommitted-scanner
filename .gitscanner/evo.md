@@ -15,3 +15,8 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+## Enhanced Stash Count Capability
+- **Stash Tracking**: Implemented tracking for Git stashes across scanned repositories by using `git rev-list -g refs/stash`. This helps developers identify stashed changes that they might have forgotten.
+- **TUI & CLI Table Extensions**: Added "Stashes" column to both the Textual TUI `DataTable` and Rich CLI `Table`.
+- **Export Capabilities**: Included `stashes` in CSV and JSON output exports.
