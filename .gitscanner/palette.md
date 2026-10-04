@@ -15,3 +15,8 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+### UX Upgrade - TUI Sorting Visual Indicators
+- Added visual sort indicators (`▲` and `▼`) directly to the `DataTable` column headers.
+- Discovered that Textual's `DataTable` column headers can be dynamically updated by setting `table.columns[key].label = new_label` using the `col_keys` returned during column creation.
+- This provides persistent visual feedback on the active sorting column and direction, enhancing the user experience beyond temporary toast notifications.
