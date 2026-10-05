@@ -21,3 +21,10 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+
+## Deferred TUI Imports
+
+- 💡 **Optimization**: Deferred `textual` imports into a factory function `get_tui_app_class()`.
+- 🎯 **Bottleneck**: Global `textual` imports added ~200ms of startup latency to every CLI invocation (even `--help`).
+- 📊 **Impact**: CLI startup time reduced from ~740ms to ~530ms.
+- 🧪 **Verification**: Validated using `time python -m git_scanner --help` before and after the change.
