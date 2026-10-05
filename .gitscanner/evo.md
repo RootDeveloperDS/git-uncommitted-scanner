@@ -15,3 +15,6 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+## GitScanner Evo Upgrade: Stash Support
+Added full support for scanning and reporting Git stashes (`refs/stash`) across CLI tables, JSON/CSV exports, and the interactive TUI. Repositories with zero uncommitted or untracked changes but containing active stashes are now appropriately detected as dirty workspaces. This provides significant practical utility for developers hunting down forgotten, saved-but-uncommitted work spanning their system.
