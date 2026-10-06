@@ -15,3 +15,15 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+## 🚀 GitScanner Evo Upgrade: Stash Counter
+
+### What
+Added practical capability to track uncommitted stash count across directories in CLI and TUI outputs.
+
+### Why
+Developers frequently lose track of stashed work when switching between multiple repositories. Showing `stashes` alongside `modified` and `untracked` files provides a complete picture of unsaved work state.
+
+### Architecture Learnings
+*   Stash count lookup requires using `git rev-list -g refs/stash` and defensively catching `CalledProcessError` (exit code 128) when no stashes exist.
+*   Textual `DataTable` UI dynamic updates successfully propagated new column without requiring re-rendering of entire application state, though export outputs (CSV/JSON) also needed corresponding dictionary updates.
