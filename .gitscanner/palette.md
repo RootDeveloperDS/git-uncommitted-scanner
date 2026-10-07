@@ -15,3 +15,8 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+### UX Upgrade - TUI Dynamic Status Bar Styling
+- Implemented dynamic CSS classes for the `Label` status bar widget (`#status-bar`) to visually differentiate scan states.
+- Added `.status-success` (green theme) for when 0 repos are found, and `.status-warning` (orange/amber theme) for when repos are detected.
+- This improves contrast and visual feedback, making the zero-results and warning states instantly noticeable and enhancing terminal readability.
