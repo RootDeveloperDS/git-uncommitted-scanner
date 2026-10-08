@@ -21,3 +21,9 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+
+## Import Latency Optimization
+- **Bottleneck**: The `typer` CLI incurred an overhead of ~500ms on startup due to loading `textual` dependencies globally.
+- **Optimization**: Wrapped the TUI logic and `textual` imports in a deferred factory `get_tui_app_class()`.
+- **Impact**: Reduced basic CLI import time to ~130ms.
+- **Verification**: Ran a headless textual test to ensure the class still functions when initialized interactively.
