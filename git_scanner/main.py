@@ -19,6 +19,7 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Label, LoadingIndicator, Input
 from textual.binding import Binding
+from rich.text import Text
 from textual.worker import get_current_worker
 
 __version__ = "0.2.0"
@@ -372,7 +373,14 @@ class GitScannerTUI(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
-        self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked", "Last Commit")
+        self.col_keys = table.add_columns(
+            "ID",
+            "Uncommitted Repository Target",
+            "Branch",
+            Text("Modified", justify="right"),
+            Text("Untracked", justify="right"),
+            "Last Commit"
+        )
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -443,8 +451,8 @@ class GitScannerTUI(App):
                   str(idx),
                   truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
                   str(repo.get('display_branch', repo['branch'])),
-                  str(repo['modified']),
-                  str(repo['untracked']),
+                  Text(str(repo['modified']), justify="right"),
+                  Text(str(repo['untracked']), justify="right"),
                   str(repo.get('last_commit', 'Unknown')),
                   key=str(repo['path'])
               )
@@ -547,6 +555,14 @@ class GitScannerTUI(App):
 
         direction = "Descending (▼ - Newest/Highest)" if (self.sort_reverse and column_index in (3, 4, 5)) else ("Descending (▼)" if self.sort_reverse else ("Ascending (▲ - Oldest/Lowest)" if column_index in (3, 4, 5) else "Ascending (▲)"))
         self.notify(f"Sorted by {col_name}: {direction}")
+
+        table = self.query_one(DataTable)
+        for idx, key in enumerate(self.col_keys):
+            col = table.columns[key]
+            base_label = ["ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked", "Last Commit"][idx]
+            label_str = f"{base_label} {'▼' if self.sort_reverse else '▲'}" if idx == self.sort_column else base_label
+            col.label = Text(label_str, justify="right") if idx in (3, 4) else label_str
+        table.refresh()
 
         search_input = self.query_one("#search-input", Input)
         search_term = search_input.value.lower() if search_input.display else ""
