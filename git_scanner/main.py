@@ -14,6 +14,7 @@ from typing import Optional, Dict, List, Any
 import typer
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 from rich import print as rprint
 from textual import on
 from textual.app import App, ComposeResult
@@ -372,7 +373,7 @@ class GitScannerTUI(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
-        self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked", "Last Commit")
+        self.col_keys = table.add_columns(Text("ID", justify="right"), "Uncommitted Repository Target", "Branch", Text("Modified", justify="right"), Text("Untracked", justify="right"), "Last Commit")
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -440,11 +441,11 @@ class GitScannerTUI(App):
         with self.batch_update():
             for idx, repo in enumerate(sorted_repos, 1):
               table.add_row(
-                  str(idx),
+                  Text(str(idx), justify="right"),
                   truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
                   str(repo.get('display_branch', repo['branch'])),
-                  str(repo['modified']),
-                  str(repo['untracked']),
+                  Text(str(repo['modified']), justify="right"),
+                  Text(str(repo['untracked']), justify="right"),
                   str(repo.get('last_commit', 'Unknown')),
                   key=str(repo['path'])
               )
