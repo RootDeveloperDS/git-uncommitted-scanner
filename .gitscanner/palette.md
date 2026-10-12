@@ -15,3 +15,10 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+### Right-Aligning Numerical Data in TUI DataTables
+- **Date**: 2026-10-12
+- **Component**: Textual TUI
+- **Issue**: Numerical counts for modified and untracked files were left-aligned, making column scanning visually difficult and inconsistent with the CLI output.
+- **Solution**: Imported `rich.text.Text` and wrapped the column headers and data rows for numerical columns in `Text(value, justify="right")`.
+- **Result**: Improved visual alignment, enhancing data readability and mirroring the CLI's tabular structure.
