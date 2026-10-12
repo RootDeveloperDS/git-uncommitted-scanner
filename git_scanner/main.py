@@ -10,9 +10,17 @@ import contextlib
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, List, Any
+from enum import Enum
 
 import typer
 from rich.console import Console
+
+class SortBy(str, Enum):
+    path = "path"
+    branch = "branch"
+    modified = "modified"
+    untracked = "untracked"
+    time = "time"
 from rich.table import Table
 from rich import print as rprint
 from textual import on
@@ -596,6 +604,8 @@ def scan(
     export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress UI banners and output only raw repository paths"),
     exclude_untracked: bool = typer.Option(False, "--exclude-untracked", "-u", help="Ignore repositories that contain only untracked files"),
+    sort: SortBy = typer.Option(SortBy.path, "--sort", "-s", help="Sort the CLI output by a specific column"),
+    reverse: bool = typer.Option(False, "--reverse", "-r", help="Reverse the sorting order"),
     version: Optional[bool] = typer.Option(None, "--version", "-v", callback=version_callback, is_eager=True, help="Show the version and exit.")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
@@ -646,6 +656,17 @@ def scan(
         if not quiet:
             rprint("[bold green]✅ All repositories are clean and committed![/bold green]")
         return
+
+    if sort == SortBy.path:
+        dirty_repos.sort(key=lambda r: str(r['path']).lower(), reverse=reverse)
+    elif sort == SortBy.branch:
+        dirty_repos.sort(key=lambda r: str(r['branch']).lower(), reverse=reverse)
+    elif sort == SortBy.modified:
+        dirty_repos.sort(key=lambda r: r.get('modified', 0), reverse=reverse)
+    elif sort == SortBy.untracked:
+        dirty_repos.sort(key=lambda r: r.get('untracked', 0), reverse=reverse)
+    elif sort == SortBy.time:
+        dirty_repos.sort(key=lambda r: r.get('last_commit_timestamp', 0), reverse=reverse)
 
     # In quiet mode, emit only raw paths (ideal for xargs/piping)
     if quiet:
