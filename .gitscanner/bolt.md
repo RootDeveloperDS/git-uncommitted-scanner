@@ -21,3 +21,9 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+
+## CLI Startup Latency Optimization
+- **Optimization**: Encapsulated `textual` imports and the `GitScannerTUI` class inside a factory function (`get_tui_app_class()`).
+- **Bottleneck**: The `textual` library was imported at the module level in `git_scanner/main.py`. Because `textual` pulls in `rich`, `markdown-it-py`, and other UI dependencies, executing simple CLI commands like `scanrepos --help` or performing standard non-interactive scans took roughly 0.8-0.9 seconds just to parse imports.
+- **Impact**: By deferring the `textual` import until interactive TUI mode is explicitly invoked (via the `-i` flag), CLI startup latency improved drastically. Command execution time for `scanrepos --help` dropped from ~0.88s to ~0.61s. Bare module import (`python -c 'import git_scanner.main'`) improved from ~0.81s to ~0.45s.
+- **Verification**: Benchmarked with `time python -c 'import git_scanner.main'` and `time python -m git_scanner --help`. Wrote a headless test script using Textual's test pilot pattern to verify that the deferred TUI mode still initializes correctly and handles data rendering.
