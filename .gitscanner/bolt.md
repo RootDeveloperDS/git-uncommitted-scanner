@@ -21,3 +21,14 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+# GitScanner Bolt Journal
+
+## Initial Run
+- Deferred Textual and Rich imports into local scopes where they are used.
+- Removed textual and rich global imports at the top of git_scanner/main.py.
+- Sped up `--help` and basic CLI execution by avoiding importing textual and rich when not needed.
+- Wrapped TUI class inside `get_tui_app_class()` function to ensure lazy evaluation.
+
+### Metrics
+- `scanrepos --help` time improved from ~0.55s to ~0.29s.
+- `scanrepos -q` time improved from ~0.45s to ~0.22s.
