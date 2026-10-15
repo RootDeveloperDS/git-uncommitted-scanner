@@ -15,3 +15,7 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+## Enable scanning of Git stashes in git-uncommitted-scanner
+
+Added the `--include-stashes` flag to standard uncommitted repo scanning, increasing its robustness by giving developers visibility into dirty repos containing only stashed, uncommitted code. Enhanced the `git-uncommitted-scanner` backend API (`get_repo_details`), CLI CSV/JSON data structures, and the TUI `DataTable` model simultaneously to present a unified experience across interactive and scripted environments.

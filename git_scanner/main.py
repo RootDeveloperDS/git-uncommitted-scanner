@@ -157,7 +157,7 @@ def find_git_repos(
             continue
 
 
-def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Optional[Dict[str, Any]]:
+def get_repo_details(repo_path: Path, exclude_untracked: bool = False, include_stashes: bool = False) -> Optional[Dict[str, Any]]:
     """Checks if a git repo has uncommitted changes and returns status details including branch and last commit age."""
     try:
         status_result = subprocess.run(
@@ -166,7 +166,7 @@ def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Option
         )
         output = status_result.stdout.strip()
         lines = [line for line in output.split('\n') if line]
-        if not lines:
+        if not lines and not include_stashes:
             return None
 
         branch = "HEAD"
@@ -197,13 +197,25 @@ def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Option
 
             lines = lines[1:]
 
-        if not lines:
+        if not lines and not include_stashes:
             return None
 
         untracked = sum(1 for line in lines if line.startswith('??'))
         modified = len(lines) - untracked
 
-        if exclude_untracked and modified == 0:
+        stashes = 0
+        if include_stashes:
+            try:
+                subprocess.run(['git', 'rev-parse', '--verify', 'refs/stash'], cwd=repo_path, capture_output=True, check=True)
+                stash_count_result = subprocess.run(['git', 'rev-list', '--walk-reflogs', '--count', 'refs/stash'], cwd=repo_path, capture_output=True, text=True)
+                stashes = int(stash_count_result.stdout.strip())
+            except Exception:
+                pass
+
+        if exclude_untracked and modified == 0 and (not include_stashes or stashes == 0):
+            return None
+
+        if not lines and stashes == 0:
             return None
 
         last_commit = "Unknown"
@@ -228,6 +240,7 @@ def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Option
             'display_branch': display_branch if 'display_branch' in locals() else branch,
             'modified': modified,
             'untracked': untracked,
+            'stashes': stashes,
             'last_commit': last_commit,
             'last_commit_timestamp': last_commit_timestamp
         }
@@ -348,13 +361,15 @@ class GitScannerTUI(App):
         target_dir: Path,
         exclude: Optional[List[str]] = None,
         max_depth: Optional[int] = None,
-        exclude_untracked: bool = False
+        exclude_untracked: bool = False,
+        include_stashes: bool = False
     ):
         super().__init__()
         self.target_dir = target_dir
         self.exclude = exclude
         self.max_depth = max_depth
         self.exclude_untracked = exclude_untracked
+        self.include_stashes = include_stashes
         self.current_repos: List[Dict[str, Any]] = []
         self.sort_column: Optional[int] = None
         self.sort_reverse: bool = False
@@ -372,7 +387,7 @@ class GitScannerTUI(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
-        self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked", "Last Commit")
+        self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked", "Stashes", "Last Commit")
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -400,7 +415,7 @@ class GitScannerTUI(App):
             for repo_path in repos:
                 if worker.is_cancelled:
                     return
-                futures.append(executor.submit(get_repo_details, repo_path, self.exclude_untracked))
+                futures.append(executor.submit(get_repo_details, repo_path, self.exclude_untracked, self.include_stashes))
             for future in as_completed(futures):
                 if worker.is_cancelled:
                     return
@@ -429,7 +444,9 @@ class GitScannerTUI(App):
                 sorted_repos.sort(key=lambda r: r.get('modified', 0), reverse=self.sort_reverse)
             elif self.sort_column == 4:  # Untracked
                 sorted_repos.sort(key=lambda r: r.get('untracked', 0), reverse=self.sort_reverse)
-            elif self.sort_column == 5:  # Last Commit (Chronological by epoch timestamp)
+            elif self.sort_column == 5:  # Stashes
+                sorted_repos.sort(key=lambda r: r.get('stashes', 0), reverse=self.sort_reverse)
+            elif self.sort_column == 6:  # Last Commit (Chronological by epoch timestamp)
                 sorted_repos.sort(key=lambda r: r.get('last_commit_timestamp', 0), reverse=self.sort_reverse)
 
         # Calculate dynamic max path length based on current screen width with a min floor of 20 chars
@@ -445,6 +462,7 @@ class GitScannerTUI(App):
                   str(repo.get('display_branch', repo['branch'])),
                   str(repo['modified']),
                   str(repo['untracked']),
+                  str(repo.get('stashes', 0)),
                   str(repo.get('last_commit', 'Unknown')),
                   key=str(repo['path'])
               )
@@ -535,7 +553,7 @@ class GitScannerTUI(App):
     def handle_header_selected(self, event: DataTable.HeaderSelected) -> None:
         """Handle clicking column header to toggle sorting."""
         column_index = event.column_index
-        col_names = ["ID", "Target", "Branch", "Modified", "Untracked", "Last Commit"]
+        col_names = ["ID", "Target", "Branch", "Modified", "Untracked", "Stashes", "Last Commit"]
         col_name = col_names[column_index] if column_index < len(col_names) else f"Column {column_index}"
 
         if self.sort_column == column_index:
@@ -543,9 +561,9 @@ class GitScannerTUI(App):
         else:
             self.sort_column = column_index
             # Default to descending (newest/highest first) for timestamps and counts, ascending for text
-            self.sort_reverse = True if column_index in (3, 4, 5) else False
+            self.sort_reverse = True if column_index in (3, 4, 5, 6) else False
 
-        direction = "Descending (▼ - Newest/Highest)" if (self.sort_reverse and column_index in (3, 4, 5)) else ("Descending (▼)" if self.sort_reverse else ("Ascending (▲ - Oldest/Lowest)" if column_index in (3, 4, 5) else "Ascending (▲)"))
+        direction = "Descending (▼ - Newest/Highest)" if (self.sort_reverse and column_index in (3, 4, 5, 6)) else ("Descending (▼)" if self.sort_reverse else ("Ascending (▲ - Oldest/Lowest)" if column_index in (3, 4, 5, 6) else "Ascending (▲)"))
         self.notify(f"Sorted by {col_name}: {direction}")
 
         search_input = self.query_one("#search-input", Input)
@@ -596,6 +614,7 @@ def scan(
     export: Optional[str] = typer.Option(None, "--export", help="Export scan results to specified file path (.json or .csv)"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress UI banners and output only raw repository paths"),
     exclude_untracked: bool = typer.Option(False, "--exclude-untracked", "-u", help="Ignore repositories that contain only untracked files"),
+    include_stashes: bool = typer.Option(False, "--include-stashes", "-s", help="Include repositories that only have stashes"),
     version: Optional[bool] = typer.Option(None, "--version", "-v", callback=version_callback, is_eager=True, help="Show the version and exit.")
 ):
     """Deep scan a directory for uncommitted Git repositories."""
@@ -621,7 +640,8 @@ def scan(
                 base_path,
                 exclude=exclude_list,
                 max_depth=final_max_depth,
-                exclude_untracked=exclude_untracked
+                exclude_untracked=exclude_untracked,
+                include_stashes=include_stashes
             )
             tui_app.run()
             rprint("\n[bold cyan]✅ Workspace Scanner Terminated Successfully.[/bold cyan]\n")
@@ -635,7 +655,7 @@ def scan(
     with status_ctx:
         repos = find_git_repos(base_path, exclude=exclude_list, max_depth=final_max_depth)
         with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 4) * 4)) as executor:
-            futures = [executor.submit(get_repo_details, repo_path, exclude_untracked) for repo_path in repos]
+            futures = [executor.submit(get_repo_details, repo_path, exclude_untracked, include_stashes) for repo_path in repos]
             dirty_repos = []
             for future in as_completed(futures):
                 details = future.result()
@@ -658,6 +678,7 @@ def scan(
                     "branch": repo['branch'],
                     "modified": repo['modified'],
                     "untracked": repo['untracked'],
+                    "stashes": repo.get('stashes', 0),
                     "last_commit": repo.get('last_commit', 'Unknown'),
                     "last_commit_timestamp": repo.get('last_commit_timestamp', 0)
                 }
@@ -667,12 +688,12 @@ def scan(
             if export_file.suffix.lower() == ".csv":
                 with open(export_file, mode='w', newline='', encoding='utf-8') as f:
                     if export_data:
-                        fieldnames = ["path", "branch", "modified", "untracked", "last_commit", "last_commit_timestamp"]
+                        fieldnames = ["path", "branch", "modified", "untracked", "stashes", "last_commit", "last_commit_timestamp"]
                         writer = csv.DictWriter(f, fieldnames=fieldnames)
                         writer.writeheader()
                         writer.writerows(export_data)
                     else:
-                        f.write("path,branch,modified,untracked,last_commit,last_commit_timestamp\n")
+                        f.write("path,branch,modified,untracked,stashes,last_commit,last_commit_timestamp\n")
             else:
                 export_file.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
         return
@@ -684,6 +705,7 @@ def scan(
                 "branch": repo['branch'],
                 "modified": repo['modified'],
                 "untracked": repo['untracked'],
+                "stashes": repo.get('stashes', 0),
                 "last_commit": repo.get('last_commit', 'Unknown'),
                 "last_commit_timestamp": repo.get('last_commit_timestamp', 0)
             }
@@ -694,12 +716,12 @@ def scan(
         if export_file.suffix.lower() == ".csv":
             with open(export_file, mode='w', newline='', encoding='utf-8') as f:
                 if export_data:
-                    fieldnames = ["path", "branch", "modified", "untracked", "last_commit", "last_commit_timestamp"]
+                    fieldnames = ["path", "branch", "modified", "untracked", "stashes", "last_commit", "last_commit_timestamp"]
                     writer = csv.DictWriter(f, fieldnames=fieldnames)
                     writer.writeheader()
                     writer.writerows(export_data)
                 else:
-                    f.write("path,branch,modified,untracked,last_commit,last_commit_timestamp\n")
+                    f.write("path,branch,modified,untracked,stashes,last_commit,last_commit_timestamp\n")
         else:
             export_file.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
 
@@ -711,6 +733,7 @@ def scan(
     table.add_column("Branch", style="green")
     table.add_column("Modified", style="yellow", justify="right")
     table.add_column("Untracked", style="red", justify="right")
+    table.add_column("Stashes", style="magenta", justify="right")
     table.add_column("Last Commit", style="blue")
 
     for idx, repo in enumerate(dirty_repos, 1):
@@ -720,6 +743,7 @@ def scan(
             str(repo.get('display_branch', repo['branch'])),
             str(repo['modified']),
             str(repo['untracked']),
+            str(repo.get('stashes', 0)),
             str(repo.get('last_commit', 'Unknown'))
         )
 
