@@ -15,3 +15,13 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+### Upgrade: Added Stash Count to Repository Details
+- Added tracking and displaying of the number of stashes in each repository.
+- **Practical Value**: It is very easy to forget about saved work inside stashes that have not been committed. The CLI and TUI now show stash counts so users can be reminded to apply/commit or discard old stashes.
+- **Implementation**:
+  - Used `git rev-parse --verify refs/stash` and `git rev-list --walk-reflogs --count refs/stash` to safely query the stashes count.
+  - Added "stashes" count to `get_repo_details` and checking for it in dirty repositories logic (a repo with stashes is dirty).
+  - Updated TUI with a new "Stashes" column and sort logic.
+  - Updated CLI exports (`.json` and `.csv`) to include stash counts.
+  - Added "Stashes" column to CLI text table output.
