@@ -15,3 +15,9 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+### UX Upgrade - TUI DataTable Alignment
+
+- Identified that numerical data in the DataTable (ID, Modified, Untracked) was difficult to read quickly because it was left-aligned.
+- Replaced the string column definitions with `rich.text.Text` objects configured with `justify="right"` for the "ID", "Modified", and "Untracked" columns to improve visual alignment and scanning.
+- Updated `_render_table_rows` to construct cells using `rich.text.Text` with `justify="right"` matching the column alignment to ensure the numbers are right-justified correctly under their headers.
