@@ -15,3 +15,8 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+## UX Upgrade: Right-justified numerical columns in TUI DataTable
+- **Date**: 2026-10-26
+- **Improvement**: Right-justified the "Modified" and "Untracked" columns and cell data in the TUI DataTable.
+- **Learning**: Textual's DataTable supports rich formatting natively. To right-justify column headers or cell data, pass a `rich.text.Text` object directly to `add_columns()` or `add_row()`: e.g. `Text('Value', justify='right')`. This improves readability for numerical counts by aligning the digits.
