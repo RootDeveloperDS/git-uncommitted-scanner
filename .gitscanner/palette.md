@@ -15,3 +15,9 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+### TUI DataTable Alignment Fix
+- **Date:** $(date +%Y-%m-%d)
+- **Component:** `DataTable` (Textual)
+- **Discovery:** By default, string values in Textual DataTables are left-aligned. However, numerical counts like "Modified" and "Untracked" files should ideally be right-aligned for better readability when scanning column data vertically.
+- **Implementation:** Used `rich.text.Text("Value", justify="right")` directly inside `table.add_columns()` and `table.add_row()` to force right-alignment for specific numerical columns in the TUI, keeping them consistent with the CLI output formatting.
