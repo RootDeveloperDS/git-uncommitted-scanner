@@ -21,3 +21,11 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+
+## YYYY-MM-DD: Deferred Textual Imports for CLI Startup Optimization
+
+**Bottleneck**: CLI tools require high responsiveness, especially for help menus or fast, scripted executions. However, the heavy framework dependencies (`textual`) were being imported at the top level of `git_scanner/main.py`. This slowed down standard CLI invocations (e.g., `git-uncommitted-scanner --help` or `--quiet`) regardless of whether the TUI was actually launched.
+**Identification**: Timed Python imports. `import git_scanner.main` took ~0.53 seconds, while textual alone accounted for >0.22 seconds of that time. `git-uncommitted-scanner --help` execution latency was ~0.83 seconds.
+**Metric**: CLI startup latency decreased. Python import time for `git_scanner.main` decreased from ~0.53s to ~0.14s. `--help` execution latency reduced from ~0.83s to ~0.53s.
+**Practical Value**: Users script CLI operations, meaning the delay accumulates during multiple automated runs. Improving this provides a faster, snappier terminal experience for users not requiring the TUI mode.
+**Verification**: Verified visually, tested non-interactive output via export parsing test script, and mocked the UI state in a headless textual verification run to ensure the TUI functionality was preserved.
