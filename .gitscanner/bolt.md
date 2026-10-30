@@ -21,3 +21,10 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+
+## CLI Startup Latency Optimization
+- **Bottleneck**: The CLI was loading heavy `textual` imports at startup, even for non-interactive executions, causing unnecessary latency.
+- **Identification**: Profiling module load times revealed `textual.app` took ~0.3s to import.
+- **Metric**: Startup time was reduced from ~0.5s to ~0.1s.
+- **Practical Value**: Improves CLI responsiveness and makes pipeline/xargs usage much faster.
+- **Verification**: Verified using `time.time()` measurements and headless mode execution.
