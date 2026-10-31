@@ -329,6 +329,19 @@ class GitScannerTUI(App):
         background: #001111;
         color: #00ffff;
         border-top: solid #00ffff;
+        transition: background 500ms, color 500ms;
+    }
+
+    #status-bar.success {
+        background: #002a11;
+        color: #00ff66;
+        border-top: solid #00ff66;
+    }
+
+    #status-bar.warning {
+        background: #2a1100;
+        color: #ffaa00;
+        border-top: solid #ffaa00;
     }
     
     LoadingIndicator { color: #00ffff; height: 1fr; }
@@ -379,10 +392,12 @@ class GitScannerTUI(App):
         """Triggers the UI loading state and starts the background worker."""
         table = self.query_one(DataTable)
         loader = self.query_one("#loader", LoadingIndicator)
+        status_bar = self.query_one("#status-bar", Label)
         
         table.display = False
         loader.display = True
-        self.query_one("#status-bar", Label).update(f"⏳ SCANNING DIRECTORY: {self.target_dir}")
+        status_bar.remove_class("success", "warning")
+        status_bar.update(f"⏳ SCANNING DIRECTORY: {self.target_dir}")
         
         self.run_worker(self.scan_directories, thread=True, exclusive=True)
 
@@ -474,9 +489,13 @@ class GitScannerTUI(App):
         
         if not repos:
             table.clear()
+            status.remove_class("warning")
+            status.add_class("success")
             status.update("✅ ALL REPOSITORIES SECURED AND COMMITTED")
             return
             
+        status.remove_class("success")
+        status.add_class("warning")
         status.update(f"⚠️ DETECTED {len(repos)} REPOSITORIES REQUIRING ATTENTION")
 
         # Re-apply active search filter if input is visible
