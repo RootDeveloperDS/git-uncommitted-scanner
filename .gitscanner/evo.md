@@ -15,3 +15,8 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+### GitScanner Evo Upgrade
+- **Feature**: Added Stash Detection & Display
+- **Value**: Provides immediate visibility into stashed work across all Git repositories, ensuring no work in progress is left behind or forgotten when scanning.
+- **Details**: Updated `get_repo_details` to check for stashes using `git rev-list --walk-reflogs --count refs/stash`. The stash count is now displayed in a new column in both the interactive TUI and CLI output, and exported in JSON and CSV formats.
