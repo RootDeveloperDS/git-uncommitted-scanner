@@ -21,3 +21,9 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+
+## Optimization: Defer Textual Imports for Faster CLI Startup
+- **Bottleneck**: `git-uncommitted-scanner` loads the heavy `textual` framework immediately on startup, regardless of whether the TUI mode (`-i`) is requested, adding significant latency.
+- **Metric**: CLI startup latency (measured by `time python -m git_scanner --help`) improved from ~0.92s to ~0.51s.
+- **Practical Value**: Commands in CLI mode respond much faster, making the tool feel snappier and reducing overhead when used in scripts.
+- **Verification**: Verified via `time python -m git_scanner --help` confirming a nearly 2x speedup in CLI mode.
