@@ -15,3 +15,7 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+### UX Upgrade - CLI Path Truncation
+- Discovered that long repository paths cause the `Rich` CLI table to wrap and become unreadable on narrow terminal windows.
+- Implemented dynamic path truncation in the CLI output using `truncate_path` and `console.size.width` with a minimum path length floor, identical to the TUI strategy, ensuring the layout remains clean and structured regardless of screen size.
