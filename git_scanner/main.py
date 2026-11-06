@@ -713,10 +713,13 @@ def scan(
     table.add_column("Untracked", style="red", justify="right")
     table.add_column("Last Commit", style="blue")
 
+    console_width = console.size.width if console.size and console.size.width > 0 else 100
+    dynamic_max_len = max(20, console_width - 55)
+
     for idx, repo in enumerate(dirty_repos, 1):
         table.add_row(
             str(idx),
-            str(repo['path']),
+            truncate_path(repo['path'], max_length=dynamic_max_len, min_length=20),
             str(repo.get('display_branch', repo['branch'])),
             str(repo['modified']),
             str(repo['untracked']),
