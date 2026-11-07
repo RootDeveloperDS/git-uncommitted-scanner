@@ -373,6 +373,12 @@ class GitScannerTUI(App):
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
         self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked", "Last Commit")
+
+        # Right align numerical columns
+        table.columns[self.col_keys[0]].alignment = "right"  # ID
+        table.columns[self.col_keys[3]].alignment = "right"  # Modified
+        table.columns[self.col_keys[4]].alignment = "right"  # Untracked
+
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
@@ -414,7 +420,7 @@ class GitScannerTUI(App):
 
     def _render_table_rows(self, repos_to_render: List[Dict[str, Any]]) -> None:
         table = self.query_one(DataTable)
-        table.clear()
+        table.clear(columns=False)
 
         # Sort the data model accurately before rendering rows
         sorted_repos = list(repos_to_render)
@@ -473,7 +479,7 @@ class GitScannerTUI(App):
         table.display = True
         
         if not repos:
-            table.clear()
+            table.clear(columns=False)
             status.update("✅ ALL REPOSITORIES SECURED AND COMMITTED")
             return
             
