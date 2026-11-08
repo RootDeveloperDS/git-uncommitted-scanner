@@ -373,6 +373,12 @@ class GitScannerTUI(App):
         table.zebra_stripes = True
         table.expand = True  # Spreads columns evenly across full screen width
         self.col_keys = table.add_columns("ID", "Uncommitted Repository Target", "Branch", "Modified", "Untracked", "Last Commit")
+
+        # Right-align numeric columns for better UX
+        table.columns[self.col_keys[0]].alignment = "right"  # ID
+        table.columns[self.col_keys[3]].alignment = "right"  # Modified
+        table.columns[self.col_keys[4]].alignment = "right"  # Untracked
+
         self.action_refresh_scan()
 
     def action_refresh_scan(self) -> None:
