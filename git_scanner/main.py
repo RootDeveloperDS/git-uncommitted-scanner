@@ -192,12 +192,26 @@ def get_repo_details(repo_path: Path, exclude_untracked: bool = False) -> Option
                 status.append(f"↑{ahead}")
             if behind > 0:
                 status.append(f"↓{behind}")
-            if status:
-                display_branch = f"{branch} [{' '.join(status)}]"
 
             lines = lines[1:]
 
-        if not lines:
+        stash_count = 0
+        try:
+            if subprocess.run(['git', 'rev-parse', '--verify', 'refs/stash'], cwd=repo_path, capture_output=True).returncode == 0:
+                stash_result = subprocess.run(
+                    ['git', 'rev-list', '--walk-reflogs', '--count', 'refs/stash'],
+                    cwd=repo_path, capture_output=True, text=True, check=True
+                )
+                stash_count = int(stash_result.stdout.strip())
+        except subprocess.CalledProcessError:
+            pass
+
+        if stash_count > 0:
+            status.append(f"*{stash_count}")
+        if status:
+            display_branch = f"{branch} [{' '.join(status)}]"
+
+        if not lines and stash_count == 0:
             return None
 
         untracked = sum(1 for line in lines if line.startswith('??'))

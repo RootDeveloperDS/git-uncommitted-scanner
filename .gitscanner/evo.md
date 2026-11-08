@@ -15,3 +15,7 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+## Stash Detection & Metrics
+- **Stash Tracking**: Integrated `git rev-parse --verify refs/stash` and `git rev-list --walk-reflogs --count refs/stash` inside `get_repo_details()` to accurately identify repositories with stashed changes.
+- **Visual Stash Indicators**: The branch column now displays `[*N]` alongside the branch name to denote `N` stashed items, preventing developers from losing track of hidden stashed work in otherwise clean repositories.
