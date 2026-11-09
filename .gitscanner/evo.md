@@ -15,3 +15,8 @@
 - **Untracked File Exclusion (`--exclude-untracked` / `-u`)**: Added a filtering flag to ignore repositories that contain only untracked files (`modified == 0 and untracked > 0`), reducing noise across workspaces with temporary or generated files.
 - **Module Execution (`python -m git_scanner`)**: Added `git_scanner/__main__.py` to provide a robust fallback execution path for users whose system PATH does not include Python's user Scripts directory.
 
+
+## Added Stash Detection
+- **Date:** $(date +%Y-%m-%d)
+- **Change:** Implemented git stash count detection and reporting for `scanrepos`.
+- **Impact:** Increases practical utility by alerting developers of forgotten uncommitted work stored in stashes alongside working tree modifications, addressing a common scenario where uncommitted work is "hidden" in stash form.
