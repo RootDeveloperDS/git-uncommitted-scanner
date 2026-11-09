@@ -15,3 +15,8 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+### TUI Column Alignment
+- **Date:** 2026-11-09
+- **Upgrade:** Added right-alignment for numeric columns (`ID`, `Modified`, `Untracked`) in the Textual DataTable.
+- **Learning:** Textual's DataTable allows configuring column text alignment directly on the column object via the `alignment` property after the columns are added. Aligning numeric and count-based columns to the right improves visual scanning and consistency with the Rich CLI output.
