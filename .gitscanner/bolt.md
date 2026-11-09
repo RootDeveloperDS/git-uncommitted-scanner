@@ -21,3 +21,7 @@
 - 📊 **Impact**: Pipelined directory discovery directly into concurrent subprocess execution, overlapping disk traversal with `git status` subprocesses and reducing total scan latency on deep directories.
 - 🧪 **Verification**: Verified via `python -m git_scanner -q .` and verified TUI background thread cancellation safety with `worker.is_cancelled` checks.
 
+### Performance Optimization: Deferred Textual Imports
+- **Bottleneck**: `textual` framework imports are very heavy and cause significant delay during CLI startup (~350ms). Users running `scanrepos` in non-interactive mode do not need `textual`.
+- **Optimization**: Deferred the heavy `textual` imports and the definition of the `GitScannerTUI` class inside a factory function `get_tui_app_class()`.
+- **Impact**: Reduced CLI startup time significantly.
