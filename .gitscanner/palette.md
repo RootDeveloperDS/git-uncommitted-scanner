@@ -15,3 +15,7 @@
 ### UX Upgrade - TUI DataTable Auto-Focus
 - Discovered that dynamically revealing a DataTable by toggling `display = True` does not automatically grant it keyboard focus, which breaks immediate keyboard navigation (like arrow keys).
 - Added explicit `self.call_later(table.focus)` inside `update_table` after a background scan finishes, ensuring to check that the search `Input` is not actively focused first to avoid stealing its focus.
+
+### UX Upgrade - TUI DataTable Column Alignment
+- Improved visual scanning and readability of numerical data within the TUI `DataTable` by right-aligning the "ID", "Modified", and "Untracked" columns.
+- Discovered that Textual `DataTable` columns can be aligned dynamically by accessing the column object via the keys returned by `add_columns()` (e.g., `table.columns[key].alignment = "right"`).
